@@ -331,7 +331,7 @@ function openFile(url, name) {
 
 /* ---------- Daten ---------- */
 
-let serverConfig = { appName: 'CarMaint', defaultCurrency: 'EUR' };
+let serverConfig = { appName: 'CarMaint', defaultCurrency: 'EUR', version: 'dev' };
 let db = { cars: [], entries: [] };
 
 async function loadData() {
@@ -554,7 +554,7 @@ function renderSettings() {
         <button class="btn ghost sm-btn" data-action="add-user">${icon('userPlus')}Hinzufügen</button>
       </div>
       <div class="card settings" id="usersCard"><p class="muted small center">Lade Benutzer …</p></div>` : ''}
-    <div class="spacer"></div>`;
+    <p class="muted small version">${esc(serverConfig.appName)} · Version ${esc(serverConfig.version)}</p>`;
 
   if (isAdmin()) renderUsers();
 }

@@ -70,5 +70,5 @@ onBootstrap((be) => {
 // Öffentliche Konfiguration für die Website (keine Geheimnisse!)
 routerAdd('GET', '/api/carmaint/config', (e) => {
   const cfg = require(`${__hooks}/config.js`);
-  return e.json(200, { appName: cfg.appName, defaultCurrency: cfg.defaultCurrency });
+  return e.json(200, { appName: cfg.appName, defaultCurrency: cfg.defaultCurrency, version: cfg.version });
 });

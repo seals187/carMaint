@@ -4,6 +4,8 @@ FROM alpine:3.22
 ARG PB_VERSION=0.40.5
 # Wird von "docker buildx" automatisch gesetzt (amd64, arm64, arm)
 ARG TARGETARCH
+# CarMaint-Version, wird vom GitHub-Workflow gesetzt (z. B. 0.1.0 oder edge)
+ARG VERSION=dev
 
 RUN set -eux; \
     apk add --no-cache ca-certificates tzdata wget unzip; \
@@ -30,6 +32,10 @@ RUN set -eux; \
 COPY pb_migrations /pb/pb_migrations
 COPY pb_hooks /pb/pb_hooks
 COPY pb_public /pb/pb_public
+
+ENV APP_VERSION=${VERSION}
+LABEL org.opencontainers.image.title="CarMaint" \
+      org.opencontainers.image.version="${VERSION}"
 
 USER carmaint
 WORKDIR /pb

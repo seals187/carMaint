@@ -8,20 +8,29 @@ Wartungs- und Reparaturheft für deine Fahrzeuge – mit Fotos, Belegen, Fahrzeu
 
 ## Schnellstart mit Docker
 
+Auf dem Server werden nur zwei Dateien gebraucht – das Image kommt fertig von ghcr.io:
+
 ```bash
-cp .env.example .env      # anpassen, mindestens ADMIN_PASSWORD!
-docker compose up -d --build
+mkdir carmaint && cd carmaint
+curl -fsSLO https://raw.githubusercontent.com/seals187/carMaint/main/docker-compose.yml
+curl -fsSL  https://raw.githubusercontent.com/seals187/carMaint/main/.env.example -o .env
+nano .env                 # anpassen, mindestens ADMIN_PASSWORD!
+docker compose up -d
 ```
 
 Danach erreichbar unter `http://<server>:8090` – Anmeldung mit `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
 
-Läuft auf VPS, Linux-VM, LXC (Proxmox, mit Docker) und Raspberry Pi (64 Bit und 32 Bit) –
-das Image wählt die passende PocketBase-Version automatisch.
+Das Image gibt es für amd64 (VPS, VM, LXC auf Proxmox) sowie arm64 und armv7 (Raspberry Pi) –
+Docker holt automatisch die passende Variante.
+
+> Ist das Paket auf ghcr.io privat, vorher auf dem Server anmelden:
+> `docker login ghcr.io -u seals187` (Passwort = Token mit Recht `read:packages`).
 
 ## Konfiguration (`.env`)
 
 | Variable | Bedeutung | Standard |
 |---|---|---|
+| `CARMAINT_VERSION` | Image-Version: `latest`, fest z. B. `0.1.0`, oder `edge` | `latest` |
 | `APP_NAME` | Name im Browser-Tab und auf der Login-Seite | `CarMaint` |
 | `APP_URL` | Öffentliche Adresse der Website | – |
 | `PORT` | Port auf dem Host | `8090` |
@@ -88,12 +97,45 @@ carmaint.example.ch {
 ## Update
 
 ```bash
-git pull                      # bzw. neue Dateien kopieren
-docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
 
 Datenbank-Änderungen (`pb_migrations/`) werden beim Start automatisch eingespielt.
+Vor größeren Updates ein Backup machen. Für kontrollierte Updates in der `.env` eine feste
+Version setzen (`CARMAINT_VERSION=0.1.0`) und bewusst erhöhen.
+
+## Versionen & Releases
+
+Versionierung nach [Semantic Versioning](https://semver.org/lang/de/): `MAJOR.MINOR.PATCH`.
+Solange die Version mit `0.` beginnt, ist CarMaint in der Anfangsentwicklung.
+
+| Image-Tag | Inhalt |
+|---|---|
+| `latest` | neuestes Release |
+| `0.1.0`, `0.1` | bestimmtes Release bzw. neuester Patch davon |
+| `edge` | aktueller Stand von `main` (Entwicklung) |
+| `sha-abc1234` | ein bestimmter Commit |
+
+GitHub Actions (`.github/workflows/docker.yml`) baut bei jedem Push auf `main` das `edge`-Image
+und bei jedem Versions-Tag ein Release. **Neue Version veröffentlichen:**
+
+1. Änderungen in `CHANGELOG.md` unter einer neuen Version eintragen
+2. Taggen und hochladen:
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+
+Faustregel: neue Funktion → `0.2.0`, nur Fehlerbehebung → `0.1.1`.
+Den Fortschritt siehst du auf GitHub unter **Actions**, die Images unter **Packages**.
+
 Die PocketBase-Version steht im `Dockerfile` (`PB_VERSION`) und in `dev.ps1`.
+
+### Image lokal bauen
+
+```bash
+docker build --build-arg VERSION=dev -t ghcr.io/seals187/carmaint:dev .
+```
 
 ## Projektstruktur
 
@@ -102,4 +144,6 @@ pb_public/       Website (index.html, style.css, app.js)
 pb_migrations/   Datenbank-Schema und Zugriffsregeln
 pb_hooks/        Server-Logik: .env lesen, Admin anlegen, /api/carmaint/config
 Dockerfile       Image (Alpine + PocketBase, läuft als Nicht-Root-Benutzer)
+.github/         GitHub Actions: Image bauen und auf ghcr.io veröffentlichen
+CHANGELOG.md     Änderungen pro Version
 ```

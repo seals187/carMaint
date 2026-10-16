@@ -13,6 +13,7 @@ const currency = env('DEFAULT_CURRENCY', 'EUR').toUpperCase();
 
 module.exports = {
   appName: env('APP_NAME', 'CarMaint'),
+  version: env('APP_VERSION', 'dev'), // wird im Docker-Image gesetzt
   appUrl: env('APP_URL').replace(/\/+$/, ''),
   defaultCurrency: CURRENCIES.includes(currency) ? currency : 'EUR',
 

@@ -259,7 +259,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .settings { padding: 4px 20px; margin-bottom: 8px; }
 .setting-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .section-head .sm-btn { margin-left: auto; padding: 6px 12px; font-size: .85rem; }
-.spacer { height: 40px; }
+.version { text-align: center; padding: 24px 0 40px; }
 
 .user-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
 .user-row + .user-row { border-top: 1px solid var(--border); }

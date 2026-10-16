@@ -1,7 +1,7 @@
 services:
   carmaint:
-    build: .
-    image: carmaint:latest
+    # Version über CARMAINT_VERSION in der .env (latest = neuestes Release, edge = Entwicklungsstand)
+    image: ghcr.io/seals187/carmaint:${CARMAINT_VERSION:-latest}
     container_name: carmaint
     restart: unless-stopped
     env_file: .env
