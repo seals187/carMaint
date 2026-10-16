@@ -7,6 +7,11 @@ costs, photos and receipts – with multi-user login. Runs as a single Docker co
 
 **Stack:** plain HTML/CSS/JS · [PocketBase](https://pocketbase.io) (SQLite) · Docker (amd64, arm64, armv7)
 
+<p align="center">
+  <img src="docs/app_preview1.png" alt="CarMaint – vehicle overview" height="260">
+  <img src="docs/app_preview2.png" alt="CarMaint – vehicle page with photos, vehicle data and history" height="260">
+</p>
+
 ## Installation
 
 Requires Docker with the Compose plugin.
