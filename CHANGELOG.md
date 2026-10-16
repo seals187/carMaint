@@ -6,6 +6,9 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+### Added
+- GitHub releases are created automatically for every version tag, with notes from this changelog
+
 ### Changed
 - README, changelog, configuration template and code comments translated to English
 

@@ -116,18 +116,23 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 | `edge` | current state of `main` (development) |
 | `sha-abc1234` | a specific commit |
 
-GitHub Actions (`.github/workflows/docker.yml`) builds the `edge` image on every push to `main`
-and a release on every version tag. **To publish a new version:**
+GitHub Actions builds the `edge` image on every push to `main` (`docker.yml`). Every version tag
+produces a release image **and** a GitHub release whose notes are taken from `CHANGELOG.md`
+(`release.yml`). **To publish a new version:**
 
-1. Add the changes to `CHANGELOG.md` under a new version
+1. In `CHANGELOG.md`, rename `[Unreleased]` to the new version (e.g. `## [0.2.0] – 2026-11-01`),
+   add a fresh empty `[Unreleased]` section above it and commit
 2. Tag and push:
    ```bash
    git tag v0.2.0
    git push origin v0.2.0
    ```
 
-Rule of thumb: new feature → `0.2.0`, bug fix only → `0.1.1`.
-Progress is shown on GitHub under **Actions**, the images under **Packages**.
+Rule of thumb: new feature → `0.2.0`, bug fix only → `0.1.1`. A tag such as `v0.2.0-beta.1` is
+published as a pre-release.
+Progress is shown on GitHub under **Actions**, the images under **Packages**, the releases under **Releases**.
+
+To create or update the release for an existing tag: **Actions → Release → Run workflow** and enter the tag.
 
 The PocketBase version is set in the `Dockerfile` (`PB_VERSION`) and in `dev.ps1`.
 
