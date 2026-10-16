@@ -1,3 +1,5 @@
+![CarMaint – your self-hosted garage](docs/banner.png)
+
 # CarMaint
 
 A maintenance and repair log for your vehicles, with photos, receipts, vehicle data and login.
