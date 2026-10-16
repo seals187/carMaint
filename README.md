@@ -43,6 +43,7 @@ All settings live in `.env` – see [`.env.example`](.env.example) for every opt
 | `CARMAINT_VERSION` | `latest`, a fixed version such as `0.1.0`, or `edge` |
 | `PORT` | Host port (default `8090`) |
 | `DEFAULT_CURRENCY` | `EUR`, `CHF` or `USD` |
+| `DEFAULT_LANGUAGE` | `de` or `en` – users can switch the language in the app |
 | `TRUSTED_PROXY_HEADERS` | e.g. `X-Forwarded-For` when running behind a reverse proxy |
 
 Apply changes with `docker compose up -d`. Forgot the admin password? Set `ADMIN_RESET_PASSWORD=true`

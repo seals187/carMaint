@@ -1,5 +1,7 @@
 'use strict';
 
+// Texts come from i18n.js: t(key, params) and tn(key, count, params).
+
 const THEME_KEY = 'carmaint:theme';
 const AUTH_KEY = 'carmaint:auth';
 const CAR_PHOTO_MAX = 1600;               // px, longest side
@@ -7,21 +9,22 @@ const ATTACHMENT_MAX = 2000;              // receipts slightly larger so text st
 const UPLOAD_CHUNK = 24 * 1024 * 1024;    // stay below the server limit (32 MB) per request
 
 const CURRENCIES = {
-  EUR: { label: 'Euro',              locale: 'de-DE' },
-  CHF: { label: 'Schweizer Franken', locale: 'de-CH' },
-  USD: { label: 'US-Dollar',         locale: 'en-US' },
+  EUR: { locale: 'de-DE' },
+  CHF: { locale: 'de-CH' },
+  USD: { locale: 'en-US' },
 };
 
-const INFO_MODES = { open: 'Offen', closed: 'Zugeklappt', remember: 'Merken' };
-const DEFAULT_SETTINGS = { currency: 'EUR', infoBox: 'remember', infoCollapsed: false };
+const INFO_MODES = ['open', 'closed', 'remember'];
+const DEFAULT_SETTINGS = { currency: 'EUR', infoBox: 'remember', infoCollapsed: false, language: 'de' };
 
 const TYPES = {
-  service:    { label: 'Service',   color: 'blue' },
-  repair:     { label: 'Reparatur', color: 'orange' },
-  inspection: { label: 'TÜV / HU',  color: 'green' },
-  tires:      { label: 'Reifen',    color: 'purple' },
-  other:      { label: 'Sonstiges', color: 'gray' },
+  service:    { color: 'blue' },
+  repair:     { color: 'orange' },
+  inspection: { color: 'green' },
+  tires:      { color: 'purple' },
+  other:      { color: 'gray' },
 };
+const typeLabel = (type) => t(`type.${TYPES[type] ? type : 'other'}`);
 
 const ICONS = {
   car: '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
@@ -54,10 +57,15 @@ const icon = (name) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">$
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const num = (v) => (v === '' || v == null ? null : Number(v));
 const str = (v) => (v == null ? '' : String(v)).trim();
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const isImageName = (name) => /\.(jpe?g|png|webp|gif|bmp|avif)$/i.test(name);
 // The server appends "_<10 chars>" to file names – strip it again for display.
 const displayName = (name) => name.replace(/_[a-z0-9]{10}(\.[^.]+)$/i, '$1');
+
+// Logo: "CarMaint" -> CAR (neutral) + MAINT (accent); other names split at the second capital letter.
+function wordmark(name) {
+  const [, a = name, b = ''] = /^carmaint$/i.test(name) ? [, name.slice(0, 3), name.slice(3)] : (name.match(/^(.[^A-Z\s]*)(.*)$/) ?? []);
+  return `<span class="logo-a">${esc(a)}</span><span class="logo-b">${esc(b)}</span>`;
+}
 
 let settings = { ...DEFAULT_SETTINGS };
 let money = currencyFormat(settings.currency);
@@ -70,67 +78,63 @@ const currencySymbol = () => money.formatToParts(0).find((p) => p.type === 'curr
 const defaultInfoCollapsed = () =>
   settings.infoBox === 'closed' || (settings.infoBox === 'remember' && settings.infoCollapsed);
 
-const number = new Intl.NumberFormat('de-DE');
-const km = (v) => (v ? `${number.format(v)} km` : '–');
-const fmtDate = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' }) : '–');
+// Dates and numbers follow the UI language.
+const locale = () => (lang === 'en' ? 'en-GB' : 'de-DE');
+const numberFormats = {};
+const fmtNum = (v) => (numberFormats[lang] ??= new Intl.NumberFormat(locale())).format(v);
+const km = (v) => (v ? `${fmtNum(v)} km` : '–');
+const fmtDate = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString(locale(), { day: '2-digit', month: 'short', year: 'numeric' }) : '–');
 const today = () => {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0, 10);
 };
 
+// Fuel values are stored in German (existing data); only the display is translated.
+const FUELS = { Benzin: 'fuel.petrol', Diesel: 'fuel.diesel', Hybrid: 'fuel.hybrid', 'Plug-in-Hybrid': 'fuel.plugin', Elektro: 'fuel.electric', 'Erdgas / LPG': 'fuel.gas' };
+const fuelLabel = (value) => (FUELS[value] ? t(FUELS[value]) : value);
+const mono = (v) => `<span class="mono">${esc(v)}</span>`;
+
 // Vehicle data shown in the info box. `format` returns safe HTML for display.
 const INFO_FIELDS = [
-  { group: 'Kauf', key: 'purchasePrice', label: () => `Kaufpreis (${currencySymbol()})`, display: 'Kaufpreis', type: 'number', step: '0.01', format: (v) => money.format(v) },
-  { group: 'Kauf', key: 'purchaseDate', label: 'Kaufdatum', type: 'date', format: fmtDate },
-  { group: 'Zulassung', key: 'firstRegistration', label: '1. Inverkehrsetzung', type: 'date', format: fmtDate },
-  { group: 'Zulassung', key: 'stammnummer', label: 'Stammnummer', placeholder: '123.456.789', format: (v) => `<span class="mono">${esc(v)}</span>` },
+  { group: 'purchase', key: 'purchasePrice', unit: () => currencySymbol(), type: 'number', step: '0.01', format: (v) => money.format(v) },
+  { group: 'purchase', key: 'purchaseDate', type: 'date', format: fmtDate },
+  { group: 'registration', key: 'firstRegistration', type: 'date', format: fmtDate },
+  { group: 'registration', key: 'stammnummer', placeholder: '123.456.789', format: mono },
   // pinned: stays visible even when the info box is collapsed
-  { group: 'Zulassung', key: 'vin', label: 'Fahrgestellnummer', placeholder: 'WVWZZZ1KZAW000000', upper: true, pinned: true, format: (v) => `<span class="mono">${esc(v)}</span>` },
-  { group: 'Zulassung', key: 'typeApproval', label: 'Typengenehmigung', placeholder: '1VA123', upper: true, pinned: true },
-  { group: 'Technik', key: 'power', label: 'Leistung (kW)', display: 'Leistung', type: 'number', format: (v) => `${number.format(v)} kW · ${number.format(Math.round(v * 1.35962))} PS` },
-  { group: 'Technik', key: 'displacement', label: 'Hubraum (cm³)', display: 'Hubraum', type: 'number', format: (v) => `${number.format(v)} cm³` },
-  { group: 'Technik', key: 'fuel', label: 'Treibstoff', options: ['Benzin', 'Diesel', 'Hybrid', 'Plug-in-Hybrid', 'Elektro', 'Erdgas / LPG'] },
-  { group: 'Technik', key: 'color', label: 'Farbe', placeholder: 'z. B. Schwarz metallic' },
-  { group: 'Prüfung (MFK)', key: 'lastInspection', label: 'Letzte MFK', type: 'date', format: fmtDate },
-  { group: 'Prüfung (MFK)', key: 'nextInspection', label: 'Nächste MFK', type: 'date', format: (v) => `${fmtDate(v)}${dueBadge(v)}` },
+  { group: 'registration', key: 'vin', placeholder: 'WVWZZZ1KZAW000000', upper: true, pinned: true, format: mono },
+  { group: 'registration', key: 'typeApproval', placeholder: '1VA123', upper: true, pinned: true },
+  { group: 'technical', key: 'power', unit: () => 'kW', type: 'number', format: (v) => `${fmtNum(v)} kW · ${fmtNum(Math.round(v * 1.35962))} ${t('unit.hp')}` },
+  { group: 'technical', key: 'displacement', unit: () => 'cm³', type: 'number', format: (v) => `${fmtNum(v)} cm³` },
+  { group: 'technical', key: 'fuel', options: Object.keys(FUELS), format: (v) => esc(fuelLabel(v)) },
+  { group: 'technical', key: 'color', placeholderKey: 'ph.color' },
+  { group: 'inspection', key: 'lastInspection', type: 'date', format: fmtDate },
+  { group: 'inspection', key: 'nextInspection', type: 'date', format: (v) => `${fmtDate(v)}${dueBadge(v)}` },
 ];
+const fieldName = (f) => t(`info.${f.key}`);
+const fieldLabel = (f) => (f.unit ? `${fieldName(f)} (${f.unit()})` : fieldName(f));
 
 function dueBadge(iso) {
   const days = Math.round((new Date(`${iso}T00:00:00`) - new Date(`${today()}T00:00:00`)) / 864e5);
-  if (days < 0) return '<span class="badge" data-color="red">überfällig</span>';
-  if (days === 0) return '<span class="badge" data-color="orange">heute</span>';
-  if (days <= 60) return `<span class="badge" data-color="orange">in ${plural(days, 'Tag', 'Tagen')}</span>`;
+  if (days < 0) return `<span class="badge" data-color="red">${t('due.overdue')}</span>`;
+  if (days === 0) return `<span class="badge" data-color="orange">${t('due.today')}</span>`;
+  if (days <= 60) return `<span class="badge" data-color="orange">${tn('due.inDays', days)}</span>`;
   return '';
 }
 
 /* ---------- Server (PocketBase) ---------- */
 
-const FIELD_LABELS = {
-  username: 'Benutzername', password: 'Passwort', passwordConfirm: 'Passwort-Wiederholung', oldPassword: 'Aktuelles Passwort',
-  make: 'Marke', model: 'Modell', title: 'Titel', date: 'Datum', photos: 'Foto', attachments: 'Anhang',
-};
-const ERROR_CODES = {
-  validation_not_unique: 'ist bereits vergeben',
-  validation_required: 'ist erforderlich',
-  validation_invalid_old_password: 'ist falsch',
-  validation_values_mismatch: 'stimmt nicht überein',
-  validation_length_out_of_range: 'hat eine ungültige Länge',
-  validation_min_text_constraint: 'ist zu kurz',
-  validation_max_text_constraint: 'ist zu lang',
-  validation_invalid_format: 'hat ein ungültiges Format',
-  validation_file_size_limit: 'ist zu groß (max. 20 MB)',
-  validation_invalid_mime_type: 'hat einen nicht erlaubten Dateityp',
-};
-
 class ApiError extends Error {
   constructor(status, data) {
     const [field, err] = Object.entries(data?.data ?? {})[0] ?? [];
     let message;
-    if (status === 0) message = 'Server nicht erreichbar.';
-    else if (status === 429) message = 'Zu viele Versuche – bitte kurz warten.';
-    else if (field) message = `${FIELD_LABELS[field] ?? field} ${ERROR_CODES[err.code] ?? `– ${err.message}`}`;
-    else message = data?.message || `Fehler ${status}`;
+    if (status === 0) message = t('err.offline');
+    else if (status === 429) message = t('err.tooMany');
+    else if (field) {
+      const label = hasTranslation(`field.${field}`) ? t(`field.${field}`) : field;
+      const reason = hasTranslation(`code.${err.code}`) ? t(`code.${err.code}`) : `– ${err.message}`;
+      message = `${label} ${reason}`;
+    } else message = data?.message || t('err.status', { status });
     super(message);
     this.status = status;
   }
@@ -230,7 +234,7 @@ async function fileUrl(path, thumb = '') {
 
 async function fetchFile(path, thumb = '') {
   const res = await fetch(await fileUrl(path, thumb));
-  if (!res.ok) throw new Error(`Datei nicht gefunden (${res.status})`);
+  if (!res.ok) throw new Error(t('err.fileNotFound', { status: res.status }));
   return res.blob();
 }
 
@@ -258,7 +262,7 @@ function hydrate() {
     img.dataset.loading = '1';
     fileObjectUrl(img.dataset.file, img.dataset.thumb)
       .then((url) => { img.src = url; })
-      .catch((err) => console.warn('Bild konnte nicht geladen werden', err));
+      .catch((err) => console.warn('Image could not be loaded', err));
   }
 }
 
@@ -282,7 +286,7 @@ const MIME_EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.we
 function withExt(name, type) {
   const ext = MIME_EXT[type];
   if (!ext) return name;
-  const base = (name || 'datei').replace(/\.[^.]+$/, '');
+  const base = (name || 'file').replace(/\.[^.]+$/, '');
   return base + ext;
 }
 
@@ -331,7 +335,7 @@ function openFile(url, name) {
 
 /* ---------- Data ---------- */
 
-let serverConfig = { appName: 'CarMaint', defaultCurrency: 'EUR', version: 'dev' };
+let serverConfig = { appName: 'CarMaint', defaultCurrency: 'EUR', defaultLanguage: 'de', version: 'dev' };
 let db = { cars: [], entries: [] };
 
 async function loadData() {
@@ -341,7 +345,7 @@ async function loadData() {
 
 const carById = (id) => db.cars.find((c) => c.id === id);
 const entryById = (id) => db.entries.find((e) => e.id === id);
-const sum = (list) => list.reduce((t, e) => t + (Number(e.cost) || 0), 0);
+const sum = (list) => list.reduce((total, e) => total + (Number(e.cost) || 0), 0);
 const entriesFor = (carId) => db.entries
   .filter((e) => e.car === carId)
   .sort((a, b) => b.date.localeCompare(a.date) || (b.mileage || 0) - (a.mileage || 0));
@@ -354,12 +358,34 @@ function upsertLocal(list, record) {
   return record;
 }
 
+/* ---------- Language ---------- */
+
+// Before login: the language last used on this device, otherwise the server default.
+function initialLanguage() {
+  let stored = null;
+  try { stored = localStorage.getItem(LANG_KEY); } catch {}
+  if (LANGUAGES[stored]) return stored;
+  if (LANGUAGES[serverConfig.defaultLanguage]) return serverConfig.defaultLanguage;
+  return navigator.language?.toLowerCase().startsWith('de') ? 'de' : 'en';
+}
+
+function setLanguage(next) {
+  if (!LANGUAGES[next]) return;
+  lang = next;
+  settings.language = next;
+  try { localStorage.setItem(LANG_KEY, next); } catch {}
+  translateStatic();
+  $('#typeSelect').innerHTML = Object.keys(TYPES).map((key) => `<option value="${key}">${typeLabel(key)}</option>`).join('');
+}
+
 function applyUserSettings() {
-  const s = { ...DEFAULT_SETTINGS, currency: serverConfig.defaultCurrency, ...(me()?.settings ?? {}) };
+  const s = { ...DEFAULT_SETTINGS, currency: serverConfig.defaultCurrency, language: lang, ...(me()?.settings ?? {}) };
   if (!CURRENCIES[s.currency]) s.currency = DEFAULT_SETTINGS.currency;
-  if (!INFO_MODES[s.infoBox]) s.infoBox = DEFAULT_SETTINGS.infoBox;
+  if (!INFO_MODES.includes(s.infoBox)) s.infoBox = DEFAULT_SETTINGS.infoBox;
+  if (!LANGUAGES[s.language]) s.language = lang;
   settings = s;
   money = currencyFormat(s.currency);
+  setLanguage(s.language);
 }
 
 // Settings belong to the user account and apply on all devices.
@@ -371,7 +397,7 @@ async function saveSettings(next) {
     setAuth({ ...auth, record });
   } catch (err) {
     console.error(err);
-    toast('Einstellung konnte nicht gespeichert werden');
+    toast(t('err.settings'));
   }
 }
 
@@ -382,7 +408,7 @@ async function login(username, password) {
     const res = await api('POST', '/api/collections/users/auth-with-password', { identity: username, password });
     setAuth({ token: res.token, record: res.record });
   } catch (err) {
-    if (err.status === 400) throw new Error('Benutzername oder Passwort falsch.');
+    if (err.status === 400) throw new Error(t('err.login'));
     throw err;
   }
 }
@@ -408,12 +434,12 @@ function resetSession() {
 
 function logout() {
   resetSession();
-  toast('Abgemeldet');
+  toast(t('toast.loggedOut'));
 }
 
 function sessionExpired() {
   resetSession();
-  toast('Bitte erneut anmelden');
+  toast(t('toast.loginAgain'));
 }
 
 function renderLogin() {
@@ -421,15 +447,17 @@ function renderLogin() {
   $('#app').innerHTML = `
     <div class="login">
       <form class="card login-card" id="loginForm">
-        <div class="login-logo">${icon('car')}</div>
         <div>
-          <h1>${esc(serverConfig.appName)}</h1>
-          <p class="muted">Melde dich an, um deine Fahrzeuge zu sehen.</p>
+          <h1 class="logo logo-lg">${wordmark(serverConfig.appName)}</h1>
+          <p class="muted">${t('login.subtitle')}</p>
         </div>
-        <label class="field">Benutzername<input name="username" required autocomplete="username" autocapitalize="none" spellcheck="false"></label>
-        <label class="field">Passwort<input name="password" type="password" required autocomplete="current-password"></label>
+        <label class="field">${t('login.username')}<input name="username" required autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+        <label class="field">${t('login.password')}<input name="password" type="password" required autocomplete="current-password"></label>
         <p class="form-error" hidden></p>
-        <button class="btn primary block" type="submit">Anmelden</button>
+        <button class="btn primary block" type="submit">${t('login.submit')}</button>
+        <div class="lang-switch">
+          ${Object.keys(LANGUAGES).map((code) => `<button type="button" data-action="set-lang" data-lang="${code}" aria-pressed="${code === lang}" title="${LANGUAGES[code]}">${code.toUpperCase()}</button>`).join('')}
+        </div>
       </form>
     </div>`;
   const form = $('#loginForm');
@@ -486,75 +514,82 @@ function renderHome() {
   $('#app').innerHTML = `
     <section class="hero">
       <div>
-        <h1>Meine Fahrzeuge</h1>
-        <p class="muted">${plural(db.cars.length, 'Fahrzeug', 'Fahrzeuge')} · ${plural(db.entries.length, 'Eintrag', 'Einträge')} · ${money.format(sum(db.entries))} gesamt</p>
+        <h1>${t('home.title')}</h1>
+        <p class="muted">${tn('count.cars', db.cars.length)} · ${tn('count.entries', db.entries.length)} · ${t('home.total', { amount: money.format(sum(db.entries)) })}</p>
       </div>
-      ${db.cars.length ? addBtn('Fahrzeug') : ''}
+      ${db.cars.length ? addBtn(t('home.addCar')) : ''}
     </section>
     ${db.cars.length
       ? `<div class="grid">${db.cars.map(carCard).join('')}</div>`
-      : emptyState('car', 'Noch keine Fahrzeuge', 'Füge dein erstes Auto hinzu – oder importiere ein Backup in den Einstellungen.', addBtn('Fahrzeug hinzufügen'))}`;
+      : emptyState('car', t('home.emptyTitle'), t('home.emptyText'), addBtn(t('home.addFirstCar')))}`;
 }
 
 function renderSettings() {
   $('#app').innerHTML = `
-    <a href="#/" class="back">${icon('back')}Alle Fahrzeuge</a>
-    <section class="hero"><h1>Einstellungen</h1></section>
+    <a href="#/" class="back">${icon('back')}${t('nav.back')}</a>
+    <section class="hero"><h1>${t('settings.title')}</h1></section>
 
-    <div class="section-head"><h2>Darstellung</h2></div>
+    <div class="section-head"><h2>${t('settings.display')}</h2></div>
     <div class="card settings">
       <div class="setting">
         <div>
-          <h3>Währung</h3>
-          <p class="muted small">Gilt für alle Kostenangaben. Bereits erfasste Beträge werden nicht umgerechnet.</p>
-          <p class="muted small" id="currencyExample">Beispiel: ${money.format(1234.5)}</p>
+          <h3>${t('settings.language')}</h3>
+          <p class="muted small">${t('settings.languageHint')}</p>
         </div>
-        ${segmented('currency', 'Währung', Object.fromEntries(Object.keys(CURRENCIES).map((c) => [c, c])))}
+        ${segmented('language', t('settings.language'), LANGUAGES)}
       </div>
       <div class="setting">
         <div>
-          <h3>Fahrzeugdaten</h3>
-          <p class="muted small">Ob die Infobox beim Öffnen eines Autos auf- oder zugeklappt ist. „Merken“ behält den zuletzt gewählten Zustand.<br>Fahrgestellnummer und Typengenehmigung sind immer sichtbar.</p>
+          <h3>${t('settings.currency')}</h3>
+          <p class="muted small">${t('settings.currencyHint')}</p>
+          <p class="muted small" id="currencyExample">${t('settings.example', { value: money.format(1234.5) })}</p>
         </div>
-        ${segmented('infoBox', 'Fahrzeugdaten', INFO_MODES)}
+        ${segmented('currency', t('settings.currency'), Object.fromEntries(Object.keys(CURRENCIES).map((c) => [c, c])))}
+      </div>
+      <div class="setting">
+        <div>
+          <h3>${t('settings.infoBox')}</h3>
+          <p class="muted small">${t('settings.infoBoxHint')}</p>
+        </div>
+        ${segmented('infoBox', t('settings.infoBox'), Object.fromEntries(INFO_MODES.map((m) => [m, t(`infoMode.${m}`)])))}
       </div>
     </div>
 
-    <div class="section-head"><h2>Daten</h2></div>
+    <div class="section-head"><h2>${t('settings.data')}</h2></div>
     <div class="card settings">
       <div class="setting">
         <div>
-          <h3>Backup</h3>
-          <p class="muted small">Alle Fahrzeuge, Einträge, Fotos und Belege in einer Datei. Beim Import werden deine aktuellen Fahrzeuge ersetzt.</p>
+          <h3>${t('settings.backup')}</h3>
+          <p class="muted small">${t('settings.backupHint')}</p>
         </div>
         <div class="setting-actions">
-          <button class="btn ghost" data-action="export">${icon('download')}Exportieren</button>
-          <label class="btn ghost">${icon('upload')}Importieren<input type="file" accept="application/json,.json" data-import hidden></label>
+          <button class="btn ghost" data-action="export">${icon('download')}${t('btn.export')}</button>
+          <label class="btn ghost">${icon('upload')}${t('btn.import')}<input type="file" accept="application/json,.json" data-import hidden></label>
         </div>
       </div>
     </div>
 
-    <div class="section-head"><h2>Konto</h2></div>
+    <div class="section-head"><h2>${t('settings.account')}</h2></div>
     <div class="card settings">
       <div class="setting">
         <div>
           <h3>${esc(me().username)}</h3>
-          <p class="muted small">${isAdmin() ? 'Administrator' : 'Benutzer'}</p>
+          <p class="muted small">${isAdmin() ? t('role.adminLong') : t('role.user')}</p>
         </div>
         <div class="setting-actions">
-          <button class="btn ghost" data-action="change-password" data-id="${esc(me().id)}">${icon('key')}Passwort ändern</button>
-          <button class="btn ghost" data-action="logout">${icon('logout')}Abmelden</button>
+          <button class="btn ghost" data-action="change-password" data-id="${esc(me().id)}">${icon('key')}${t('pw.change')}</button>
+          <button class="btn ghost" data-action="logout">${icon('logout')}${t('nav.logout')}</button>
         </div>
       </div>
     </div>
 
     ${isAdmin() ? `
       <div class="section-head">
-        <h2>Benutzer</h2>
-        <button class="btn ghost sm-btn" data-action="add-user">${icon('userPlus')}Hinzufügen</button>
+        <h2>${t('settings.users')}</h2>
+        <button class="btn ghost sm-btn" data-action="add-user">${icon('userPlus')}${t('btn.add')}</button>
       </div>
-      <div class="card settings" id="usersCard"><p class="muted small center">Lade Benutzer …</p></div>` : ''}
-    <p class="muted small version">${esc(serverConfig.appName)} · Version ${esc(serverConfig.version)}</p>`;
+      <div class="card settings" id="usersCard"><p class="muted small center">${t('settings.loadingUsers')}</p></div>` : ''}
+    <p class="muted small version">${esc(serverConfig.appName)} · ${t('settings.version', { version: esc(serverConfig.version) })}</p>`;
 
   if (isAdmin()) renderUsers();
 }
@@ -566,16 +601,17 @@ async function renderUsers() {
     if (!card.isConnected) return;
     card.innerHTML = users.map((u) => {
       const self = u.id === me().id;
+      const name = esc(u.username);
       return `
         <div class="user-row">
           <div class="user-avatar">${esc(u.username.slice(0, 1).toUpperCase())}</div>
           <div class="grow">
-            <strong>${esc(u.username)}</strong>${self ? ' <span class="muted small">(du)</span>' : ''}
-            <p class="muted small">${u.role === 'admin' ? 'Administrator' : 'Benutzer'}</p>
+            <strong>${name}</strong>${self ? ` <span class="muted small">${t('users.you')}</span>` : ''}
+            <p class="muted small">${u.role === 'admin' ? t('role.adminLong') : t('role.user')}</p>
           </div>
           ${self ? '' : `
-            <button class="icon-btn sm" data-action="change-password" data-id="${esc(u.id)}" data-name="${esc(u.username)}" title="Passwort zurücksetzen" aria-label="Passwort von ${esc(u.username)} zurücksetzen">${icon('key')}</button>
-            <button class="icon-btn sm danger" data-action="delete-user" data-id="${esc(u.id)}" data-name="${esc(u.username)}" title="Benutzer löschen" aria-label="${esc(u.username)} löschen">${icon('trash')}</button>`}
+            <button class="icon-btn sm" data-action="change-password" data-id="${esc(u.id)}" data-name="${name}" title="${t('users.resetPw')}" aria-label="${t('users.resetPwFor', { name })}">${icon('key')}</button>
+            <button class="icon-btn sm danger" data-action="delete-user" data-id="${esc(u.id)}" data-name="${name}" title="${t('users.delete')}" aria-label="${t('users.deleteNamed', { name })}">${icon('trash')}</button>`}
         </div>`;
     }).join('');
   } catch (err) {
@@ -585,11 +621,11 @@ async function renderUsers() {
 
 function segmented(name, ariaLabel, options) {
   return `
-    <div class="segmented" role="radiogroup" aria-label="${ariaLabel}">
+    <div class="segmented" role="radiogroup" aria-label="${esc(ariaLabel)}">
       ${Object.entries(options).map(([value, label]) => `
         <label>
           <input type="radio" name="${name}" value="${value}" ${settings[name] === value ? 'checked' : ''}>
-          <span>${label}</span>
+          <span>${esc(label)}</span>
         </label>`).join('')}
     </div>`;
 }
@@ -598,12 +634,17 @@ document.addEventListener('change', (ev) => {
   const { name, value } = ev.target;
   if (name === 'currency' && CURRENCIES[value]) {
     saveSettings({ currency: value });
-    $('#currencyExample').textContent = `Beispiel: ${money.format(1234.5)}`;
-    toast(`Währung: ${CURRENCIES[value].label}`);
-  } else if (name === 'infoBox' && INFO_MODES[value]) {
+    $('#currencyExample').textContent = t('settings.example', { value: money.format(1234.5) });
+    toast(t('toast.currency', { name: t(`currency.${value}`) }));
+  } else if (name === 'infoBox' && INFO_MODES.includes(value)) {
     saveSettings({ infoBox: value });
     infoCollapsed = defaultInfoCollapsed();
-    toast(`Fahrzeugdaten: ${INFO_MODES[value]}`);
+    toast(t('toast.infoMode', { mode: t(`infoMode.${value}`) }));
+  } else if (name === 'language' && LANGUAGES[value]) {
+    setLanguage(value);
+    saveSettings({ language: value });
+    route();
+    toast(t('toast.language'));
   }
 });
 
@@ -612,23 +653,24 @@ function carCard(car) {
   const last = entries[0];
   const cover = car.photos[0];
   const sub = [car.year, car.plate].filter(Boolean).map(esc).join(' · ');
+  const carName = `${esc(car.make)} ${esc(car.model)}`;
   return `
     <article class="card car-card">
       <div class="car-media">${cover ? `<img data-file="${esc(carFile(car, cover))}" data-thumb="640x360" alt="">` : icon('car')}</div>
       <div class="car-card-body">
         <div class="car-card-title">
           <div>
-            <h3><a class="card-link" href="#/car/${esc(car.id)}">${esc(car.make)} ${esc(car.model)}</a></h3>
+            <h3><a class="card-link" href="#/car/${esc(car.id)}">${carName}</a></h3>
             <p class="muted small">${sub || '&nbsp;'}</p>
           </div>
-          <button class="icon-btn quick-add" data-action="add-entry" data-id="${esc(car.id)}" title="Eintrag hinzufügen" aria-label="Eintrag für ${esc(car.make)} ${esc(car.model)} hinzufügen">${icon('wrench')}</button>
+          <button class="icon-btn quick-add" data-action="add-entry" data-id="${esc(car.id)}" title="${t('card.addEntry')}" aria-label="${t('card.addEntryFor', { car: carName })}">${icon('wrench')}</button>
         </div>
         <dl class="stats">
-          <div><dt>Kilometer</dt><dd>${km(car.mileage)}</dd></div>
-          <div><dt>Einträge</dt><dd>${entries.length}</dd></div>
-          <div><dt>Kosten</dt><dd>${money.format(sum(entries))}</dd></div>
+          <div><dt>${t('stats.km')}</dt><dd>${km(car.mileage)}</dd></div>
+          <div><dt>${t('stats.entries')}</dt><dd>${entries.length}</dd></div>
+          <div><dt>${t('stats.cost')}</dt><dd>${money.format(sum(entries))}</dd></div>
         </dl>
-        <p class="card-foot muted">${last ? `Zuletzt: ${esc(last.title)} · <span class="nowrap">${fmtDate(last.date)}</span>` : 'Noch keine Einträge'}</p>
+        <p class="card-foot muted">${last ? `${t('card.last', { title: esc(last.title) })} · <span class="nowrap">${fmtDate(last.date)}</span>` : t('card.noEntries')}</p>
       </div>
     </article>`;
 }
@@ -643,7 +685,7 @@ function renderCar(car) {
   const id = esc(car.id);
 
   $('#app').innerHTML = `
-    <a href="#/" class="back">${icon('back')}Alle Fahrzeuge</a>
+    <a href="#/" class="back">${icon('back')}${t('nav.back')}</a>
     <section class="hero">
       <div class="hero-title">
         <div class="avatar lg">${photos[0] ? `<img data-file="${esc(carFile(car, photos[0]))}" data-thumb="300x225" alt="">` : icon('car')}</div>
@@ -653,32 +695,32 @@ function renderCar(car) {
         </div>
       </div>
       <div class="hero-actions">
-        <button class="icon-btn" data-action="edit-car" data-id="${id}" title="Fahrzeug bearbeiten" aria-label="Fahrzeug bearbeiten">${icon('pencil')}</button>
-        <button class="icon-btn danger" data-action="delete-car" data-id="${id}" title="Fahrzeug löschen" aria-label="Fahrzeug löschen">${icon('trash')}</button>
-        <button class="btn primary" data-action="add-entry" data-id="${id}">${icon('plus')}Eintrag</button>
+        <button class="icon-btn" data-action="edit-car" data-id="${id}" title="${t('car.edit')}" aria-label="${t('car.edit')}">${icon('pencil')}</button>
+        <button class="icon-btn danger" data-action="delete-car" data-id="${id}" title="${t('car.delete')}" aria-label="${t('car.delete')}">${icon('trash')}</button>
+        <button class="btn primary" data-action="add-entry" data-id="${id}">${icon('plus')}${t('btn.entry')}</button>
       </div>
     </section>
     <div class="tiles">
-      ${tile('Kilometerstand', km(car.mileage))}
-      ${tile('Gesamtkosten', money.format(sum(entries)))}
-      ${tile(`Kosten ${year}`, money.format(sum(entries.filter((e) => e.date.startsWith(year)))))}
-      ${tile('Letzter Service', lastService ? fmtDate(lastService.date) : '–')}
+      ${tile(t('tile.mileage'), km(car.mileage))}
+      ${tile(t('tile.totalCost'), money.format(sum(entries)))}
+      ${tile(t('tile.costYear', { year }), money.format(sum(entries.filter((e) => e.date.startsWith(year)))))}
+      ${tile(t('tile.lastService'), lastService ? fmtDate(lastService.date) : '–')}
     </div>
 
     <div class="car-overview">
       <section>
-        <div class="section-head"><h2>Fotos</h2>${photos.length ? `<span class="muted small">${photos.length}</span>` : ''}</div>
+        <div class="section-head"><h2>${t('photos.title')}</h2>${photos.length ? `<span class="muted small">${photos.length}</span>` : ''}</div>
         <div class="photo-grid">
           ${photos.map((name, i) => `
             <div class="thumb">
-              <button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="${i}" aria-label="Foto ${i + 1} ansehen"><img data-file="${esc(carFile(car, name))}" data-thumb="300x225" alt=""></button>
-              ${i === 0 ? '<span class="cover-badge">Titelbild</span>' : ''}
+              <button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="${i}" aria-label="${t('photos.view', { n: i + 1 })}"><img data-file="${esc(carFile(car, name))}" data-thumb="300x225" alt=""></button>
+              ${i === 0 ? `<span class="cover-badge">${t('photos.cover')}</span>` : ''}
               <div class="thumb-actions">
-                ${i > 0 ? `<button class="icon-btn sm" data-action="cover-photo" data-id="${id}" data-photo="${esc(name)}" title="Als Titelbild" aria-label="Als Titelbild">${icon('star')}</button>` : ''}
-                <button class="icon-btn sm" data-action="delete-photo" data-id="${id}" data-photo="${esc(name)}" title="Foto löschen" aria-label="Foto löschen">${icon('trash')}</button>
+                ${i > 0 ? `<button class="icon-btn sm" data-action="cover-photo" data-id="${id}" data-photo="${esc(name)}" title="${t('photos.makeCover')}" aria-label="${t('photos.makeCover')}">${icon('star')}</button>` : ''}
+                <button class="icon-btn sm" data-action="delete-photo" data-id="${id}" data-photo="${esc(name)}" title="${t('photos.delete')}" aria-label="${t('photos.delete')}">${icon('trash')}</button>
               </div>
             </div>`).join('')}
-          <label class="thumb add">${icon('image')}<span>Fotos hinzufügen</span>
+          <label class="thumb add">${icon('image')}<span>${t('photos.add')}</span>
             <input type="file" multiple accept="image/*" data-upload="car-photos" data-id="${id}" hidden>
           </label>
         </div>
@@ -686,14 +728,14 @@ function renderCar(car) {
       ${infoBox(car)}
     </div>
 
-    <div class="section-head"><h2>Historie</h2>${entries.length ? `<span class="muted small">${entries.length}</span>` : ''}</div>
+    <div class="section-head"><h2>${t('history.title')}</h2>${entries.length ? `<span class="muted small">${entries.length}</span>` : ''}</div>
     ${entries.length ? `
       <div class="toolbar">
         <div class="chips">
-          ${['all', ...Object.keys(TYPES)].map((t) => `
-            <button class="chip" data-action="filter" data-type="${t}" aria-pressed="${filter.type === t}">${t === 'all' ? 'Alle' : TYPES[t].label}</button>`).join('')}
+          ${['all', ...Object.keys(TYPES)].map((type) => `
+            <button class="chip" data-action="filter" data-type="${type}" aria-pressed="${filter.type === type}">${type === 'all' ? t('filter.all') : typeLabel(type)}</button>`).join('')}
         </div>
-        <label class="search">${icon('search')}<input type="search" id="search" placeholder="Suchen …" value="${esc(filter.q)}" aria-label="Einträge durchsuchen"></label>
+        <label class="search">${icon('search')}<input type="search" id="search" placeholder="${t('search.placeholder')}" value="${esc(filter.q)}" aria-label="${t('search.aria')}"></label>
       </div>` : ''}
     <div id="entries"></div>`;
 
@@ -714,21 +756,21 @@ function infoBox(car) {
   return `
     <aside class="infobox-wrap${collapsed ? ' collapsed' : ''}" id="infobox">
       <div class="section-head">
-        <h2>Fahrzeugdaten</h2>
+        <h2>${t('info.title')}</h2>
         <div class="infobox-actions">
-          ${rows.length ? `<button class="icon-btn sm" data-action="edit-info" data-id="${id}" title="Fahrzeugdaten bearbeiten" aria-label="Fahrzeugdaten bearbeiten">${icon('pencil')}</button>` : ''}
-          ${collapsible ? `<button class="icon-btn sm info-toggle" data-action="toggle-info" aria-expanded="${!collapsed}" title="Auf-/Zuklappen" aria-label="Fahrzeugdaten auf- oder zuklappen">${icon('chevronDown')}</button>` : ''}
+          ${rows.length ? `<button class="icon-btn sm" data-action="edit-info" data-id="${id}" title="${t('info.edit')}" aria-label="${t('info.edit')}">${icon('pencil')}</button>` : ''}
+          ${collapsible ? `<button class="icon-btn sm info-toggle" data-action="toggle-info" aria-expanded="${!collapsed}" title="${t('info.toggle')}" aria-label="${t('info.toggleAria')}">${icon('chevronDown')}</button>` : ''}
         </div>
       </div>
       <div class="card infobox">
       ${rows.length
         ? `<dl class="info-list">${rows.map((f) => `
-            <div${f.pinned ? ' class="pinned"' : ''}><dt>${f.display ?? f.label}</dt><dd>${f.format ? f.format(info[f.key]) : esc(info[f.key])}</dd></div>`).join('')}
+            <div${f.pinned ? ' class="pinned"' : ''}><dt>${fieldName(f)}</dt><dd>${f.format ? f.format(info[f.key]) : esc(info[f.key])}</dd></div>`).join('')}
           </dl>
-          ${collapsible ? `<button class="info-more" data-action="toggle-info">${plural(hiddenCount, 'weiteres Feld', 'weitere Felder')} anzeigen</button>` : ''}`
+          ${collapsible ? `<button class="info-more" data-action="toggle-info">${tn('info.more', hiddenCount)}</button>` : ''}`
         : `<div class="infobox-empty">
-             <p class="muted small">Kaufpreis, Stammnummer, nächste MFK und mehr an einem Ort.</p>
-             <button class="btn ghost file-btn" data-action="edit-info" data-id="${id}">${icon('plus')}Daten erfassen</button>
+             <p class="muted small">${t('info.emptyText')}</p>
+             <button class="btn ghost file-btn" data-action="edit-info" data-id="${id}">${icon('plus')}${t('info.add')}</button>
            </div>`}
       </div>
     </aside>`;
@@ -743,10 +785,10 @@ function renderEntries(car) {
 
   let html;
   if (!all.length) {
-    html = emptyState('wrench', 'Noch keine Einträge', 'Notiere deinen ersten Service oder eine Reparatur.',
-      `<button class="btn primary" data-action="add-entry" data-id="${esc(car.id)}">${icon('plus')}Eintrag hinzufügen</button>`);
+    html = emptyState('wrench', t('entries.emptyTitle'), t('entries.emptyText'),
+      `<button class="btn primary" data-action="add-entry" data-id="${esc(car.id)}">${icon('plus')}${t('entries.add')}</button>`);
   } else if (!list.length) {
-    html = '<p class="muted center">Keine passenden Einträge gefunden.</p>';
+    html = `<p class="muted center">${t('entries.noMatch')}</p>`;
   } else {
     let lastYear = null;
     html = `<ul class="timeline">${list.map((e) => {
@@ -763,20 +805,20 @@ function renderEntries(car) {
 function attachmentItem(entry, name) {
   const label = esc(attachmentLabel(entry, name));
   if (isImageName(name)) {
-    return `<button class="att" data-action="view-attachment" data-id="${esc(entry.id)}" data-file="${esc(name)}" title="${label}" aria-label="${label} ansehen"><img data-file="${esc(entryFile(entry, name))}" data-thumb="128x128" alt=""></button>`;
+    return `<button class="att" data-action="view-attachment" data-id="${esc(entry.id)}" data-file="${esc(name)}" title="${label}" aria-label="${t('att.view', { name: label })}"><img data-file="${esc(entryFile(entry, name))}" data-thumb="128x128" alt=""></button>`;
   }
   return `<button class="att file" data-action="open-file" data-id="${esc(entry.id)}" data-file="${esc(name)}" title="${label}">${icon('file')}<span>${label}</span></button>`;
 }
 
 function entryItem(e) {
-  const t = TYPES[e.type] ?? TYPES.other;
+  const color = (TYPES[e.type] ?? TYPES.other).color;
   const id = esc(e.id);
   return `
-    <li class="entry" data-color="${t.color}">
+    <li class="entry" data-color="${color}">
       <div class="entry-dot"></div>
       <div class="card entry-body">
         <div class="entry-head">
-          <span class="badge" data-color="${t.color}">${t.label}</span>
+          <span class="badge" data-color="${color}">${typeLabel(e.type)}</span>
           <time datetime="${esc(e.date)}">${fmtDate(e.date)}</time>
           ${e.mileage ? `<span class="muted">${km(e.mileage)}</span>` : ''}
           <span class="entry-cost">${e.cost ? money.format(e.cost) : ''}</span>
@@ -786,8 +828,8 @@ function entryItem(e) {
         ${e.notes ? `<p class="entry-notes">${esc(e.notes)}</p>` : ''}
         ${e.attachments.length ? `<div class="attachments">${e.attachments.map((name) => attachmentItem(e, name)).join('')}</div>` : ''}
         <div class="entry-actions">
-          <button class="icon-btn sm" data-action="edit-entry" data-id="${id}" title="Bearbeiten" aria-label="Bearbeiten">${icon('pencil')}</button>
-          <button class="icon-btn sm danger" data-action="delete-entry" data-id="${id}" title="Löschen" aria-label="Löschen">${icon('trash')}</button>
+          <button class="icon-btn sm" data-action="edit-entry" data-id="${id}" title="${t('btn.edit')}" aria-label="${t('btn.edit')}">${icon('pencil')}</button>
+          <button class="icon-btn sm danger" data-action="delete-entry" data-id="${id}" title="${t('btn.delete')}" aria-label="${t('btn.delete')}">${icon('trash')}</button>
         </div>
       </div>
     </li>`;
@@ -807,9 +849,6 @@ const passwordDialog = $('#passwordDialog');
 const passwordForm = $('#passwordForm');
 const lightbox = $('#lightbox');
 
-$('#typeSelect').innerHTML = Object.entries(TYPES)
-  .map(([key, t]) => `<option value="${key}">${t.label}</option>`).join('');
-
 function showDialog(dialog) {
   dialog.querySelectorAll('.form-error').forEach((el) => { el.hidden = true; });
   dialog.showModal();
@@ -824,7 +863,7 @@ async function withBusy(form, fn) {
     await fn();
   } catch (err) {
     console.error(err);
-    const message = err.message || 'Speichern fehlgeschlagen.';
+    const message = err.message || t('err.save');
     if (errorEl) {
       errorEl.textContent = message;
       errorEl.hidden = false;
@@ -842,14 +881,14 @@ function openCarDialog(car) {
   f.namedItem('id').value = car?.id ?? '';
   for (const key of ['make', 'model', 'plate']) f.namedItem(key).value = car?.[key] ?? '';
   for (const key of ['year', 'mileage']) f.namedItem(key).value = car?.[key] || '';
-  $('#carPhotosLabel').textContent = 'Fotos auswählen';
-  $('#carDialogTitle').textContent = car ? 'Fahrzeug bearbeiten' : 'Neues Fahrzeug';
+  $('#carPhotosLabel').textContent = t('car.choosePhotos');
+  $('#carDialogTitle').textContent = car ? t('car.edit') : t('car.new');
   showDialog(carDialog);
 }
 
 $('#carPhotos').addEventListener('change', (ev) => {
   const n = ev.target.files.length;
-  $('#carPhotosLabel').textContent = n ? `${plural(n, 'Foto', 'Fotos')} ausgewählt` : 'Fotos auswählen';
+  $('#carPhotosLabel').textContent = n ? tn('car.photosSelected', n) : t('car.choosePhotos');
 });
 
 carForm.addEventListener('submit', (ev) => {
@@ -872,7 +911,7 @@ carForm.addEventListener('submit', (ev) => {
     carDialog.close();
     if (!f.id) location.hash = `#/car/${car.id}`;
     route();
-    toast(f.id ? 'Fahrzeug aktualisiert' : 'Fahrzeug hinzugefügt');
+    toast(f.id ? t('toast.carUpdated') : t('toast.carAdded'));
   });
 });
 
@@ -882,7 +921,7 @@ let draft = { entry: null, keep: [], add: [] };
 function renderDraft() {
   const item = (media, name, list, i) => `
     <div class="draft-item">${media}<span>${esc(name)}</span>
-      <button type="button" class="icon-btn sm" data-remove="${list}" data-index="${i}" aria-label="${esc(name)} entfernen">${icon('x')}</button>
+      <button type="button" class="icon-btn sm" data-remove="${list}" data-index="${i}" aria-label="${t('att.remove', { name: esc(name) })}">${icon('x')}</button>
     </div>`;
   $('#attEditor').innerHTML = [
     ...draft.keep.map((name, i) => item(
@@ -914,7 +953,7 @@ function openEntryDialog(entry) {
   draft.entry = entry.id ? entry : null;
   draft.keep = [...(entry.attachments ?? [])];
   renderDraft();
-  $('#entryDialogTitle').textContent = entry.id ? 'Eintrag bearbeiten' : `Neuer Eintrag · ${car.make} ${car.model}`;
+  $('#entryDialogTitle').textContent = entry.id ? t('entry.edit') : t('entry.new', { car: `${car.make} ${car.model}` });
   showDialog(entryDialog);
 }
 
@@ -969,16 +1008,16 @@ entryForm.addEventListener('submit', (ev) => {
 
     entryDialog.close();
     route();
-    toast(existing ? 'Eintrag aktualisiert' : 'Eintrag gespeichert');
+    toast(existing ? t('toast.entryUpdated') : t('toast.entrySaved'));
   });
 });
 
 function infoInput(f, value) {
-  const label = typeof f.label === 'function' ? f.label() : f.label;
+  const placeholder = f.placeholderKey ? t(f.placeholderKey) : (f.placeholder ?? '');
   const control = f.options
-    ? `<select name="${f.key}"><option value="">–</option>${f.options.map((o) => `<option ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`
-    : `<input name="${f.key}" type="${f.type ?? 'text'}" value="${esc(value ?? '')}"${f.type === 'number' ? ' min="0"' : ''}${f.step ? ` step="${f.step}"` : ''} placeholder="${esc(f.placeholder ?? '')}">`;
-  return `<label class="field">${label}${control}</label>`;
+    ? `<select name="${f.key}"><option value="">–</option>${f.options.map((o) => `<option value="${esc(o)}" ${o === value ? 'selected' : ''}>${esc(fuelLabel(o))}</option>`).join('')}</select>`
+    : `<input name="${f.key}" type="${f.type ?? 'text'}" value="${esc(value ?? '')}"${f.type === 'number' ? ' min="0"' : ''}${f.step ? ` step="${f.step}"` : ''} placeholder="${esc(placeholder)}">`;
+  return `<label class="field">${esc(fieldLabel(f))}${control}</label>`;
 }
 
 function openInfoDialog(car) {
@@ -986,11 +1025,11 @@ function openInfoDialog(car) {
   const groups = [...new Set(INFO_FIELDS.map((f) => f.group))];
   $('#infoFields').innerHTML = groups.map((g) => `
     <div class="form-group">
-      <h3>${g}</h3>
+      <h3>${t(`info.group.${g}`)}</h3>
       <div class="row">${INFO_FIELDS.filter((f) => f.group === g).map((f) => infoInput(f, info[f.key])).join('')}</div>
     </div>`).join('');
   infoForm.elements.namedItem('carId').value = car.id;
-  $('#infoDialogTitle').textContent = `Fahrzeugdaten · ${car.make} ${car.model}`;
+  $('#infoDialogTitle').textContent = t('info.dialogTitle', { car: `${car.make} ${car.model}` });
   showDialog(infoDialog);
 }
 
@@ -1006,7 +1045,7 @@ infoForm.addEventListener('submit', (ev) => {
     upsertLocal('cars', await api('PATCH', rec('cars', form.get('carId')), { info }));
     infoDialog.close();
     route();
-    toast('Fahrzeugdaten gespeichert');
+    toast(t('toast.infoSaved'));
   });
 });
 
@@ -1016,7 +1055,7 @@ function openPasswordDialog(userId, username) {
   passwordForm.elements.namedItem('userId').value = userId;
   $('#oldPasswordField').hidden = !self;
   passwordForm.elements.namedItem('oldPassword').required = self;
-  $('#passwordDialogTitle').textContent = self ? 'Passwort ändern' : `Passwort für ${username} setzen`;
+  $('#passwordDialogTitle').textContent = self ? t('pw.change') : t('pw.setFor', { name: username });
   showDialog(passwordDialog);
 }
 
@@ -1024,7 +1063,7 @@ passwordForm.addEventListener('submit', (ev) => {
   ev.preventDefault();
   withBusy(passwordForm, async () => {
     const f = Object.fromEntries(new FormData(passwordForm));
-    if (f.password !== f.passwordConfirm) throw new Error('Die neuen Passwörter stimmen nicht überein.');
+    if (f.password !== f.passwordConfirm) throw new Error(t('err.pwMismatch'));
     const self = f.userId === me().id;
     const body = { password: f.password, passwordConfirm: f.passwordConfirm };
     if (self) body.oldPassword = f.oldPassword;
@@ -1036,7 +1075,7 @@ passwordForm.addEventListener('submit', (ev) => {
       await login(username, f.password);
     }
     passwordDialog.close();
-    toast('Passwort geändert');
+    toast(t('toast.pwChanged'));
   });
 });
 
@@ -1053,7 +1092,7 @@ userForm.addEventListener('submit', (ev) => {
     });
     userDialog.close();
     renderUsers();
-    toast(`Benutzer ${f.username.trim()} angelegt`);
+    toast(t('toast.userCreated', { name: f.username.trim() }));
   });
 });
 
@@ -1111,7 +1150,7 @@ async function runAction(fn) {
     await fn();
   } catch (err) {
     console.error(err);
-    alert(err.message || 'Aktion fehlgeschlagen.');
+    alert(err.message || t('err.action'));
   }
 }
 
@@ -1121,6 +1160,10 @@ document.addEventListener('click', (ev) => {
   const { action, id } = el.dataset;
 
   switch (action) {
+    case 'set-lang':
+      setLanguage(el.dataset.lang);
+      route();
+      break;
     case 'logout':
       logout();
       break;
@@ -1132,8 +1175,8 @@ document.addEventListener('click', (ev) => {
       break;
     case 'delete-car': {
       const car = carById(id);
-      const count = entriesFor(id).length;
-      if (!confirm(`${car.make} ${car.model} und ${plural(count, 'Eintrag', 'Einträge')} wirklich löschen?`)) return;
+      const entries = tn('count.entries', entriesFor(id).length);
+      if (!confirm(t('confirm.deleteCar', { car: `${car.make} ${car.model}`, entries }))) return;
       runAction(async () => {
         await api('DELETE', rec('cars', id));
         db.cars = db.cars.filter((c) => c.id !== id);
@@ -1141,7 +1184,7 @@ document.addEventListener('click', (ev) => {
         forgetFiles(`cars/${id}/`);
         location.hash = '#/';
         route();
-        toast('Fahrzeug gelöscht');
+        toast(t('toast.carDeleted'));
       });
       break;
     }
@@ -1167,16 +1210,16 @@ document.addEventListener('click', (ev) => {
         const photos = [el.dataset.photo, ...car.photos.filter((p) => p !== el.dataset.photo)];
         upsertLocal('cars', await api('PATCH', rec('cars', id), { photos }));
         route();
-        toast('Titelbild geändert');
+        toast(t('toast.coverChanged'));
       });
       break;
     case 'delete-photo':
-      if (!confirm('Dieses Foto löschen?')) return;
+      if (!confirm(t('confirm.deletePhoto'))) return;
       runAction(async () => {
         upsertLocal('cars', await api('PATCH', rec('cars', id), { 'photos-': [el.dataset.photo] }));
         forgetFiles(`cars/${id}/${el.dataset.photo}|`);
         route();
-        toast('Foto gelöscht');
+        toast(t('toast.photoDeleted'));
       });
       break;
     case 'add-entry':
@@ -1187,13 +1230,13 @@ document.addEventListener('click', (ev) => {
       break;
     case 'delete-entry': {
       const entry = entryById(id);
-      if (!confirm(`„${entry.title}“ wirklich löschen?`)) return;
+      if (!confirm(t('confirm.deleteEntry', { title: entry.title }))) return;
       runAction(async () => {
         await api('DELETE', rec('entries', id));
         db.entries = db.entries.filter((e) => e.id !== id);
         forgetFiles(`entries/${id}/`);
         route();
-        toast('Eintrag gelöscht');
+        toast(t('toast.entryDeleted'));
       });
       break;
     }
@@ -1226,11 +1269,11 @@ document.addEventListener('click', (ev) => {
       showDialog(userDialog);
       break;
     case 'delete-user':
-      if (!confirm(`Benutzer „${el.dataset.name}“ und alle seine Fahrzeuge wirklich löschen?`)) return;
+      if (!confirm(t('confirm.deleteUser', { name: el.dataset.name }))) return;
       runAction(async () => {
         await api('DELETE', rec('users', id));
         renderUsers();
-        toast(`Benutzer ${el.dataset.name} gelöscht`);
+        toast(t('toast.userDeleted', { name: el.dataset.name }));
       });
       break;
   }
@@ -1240,12 +1283,12 @@ document.addEventListener('change', async (ev) => {
   const input = ev.target.closest('input[data-upload="car-photos"]');
   if (!input?.files.length) return;
   const files = [...input.files];
-  toast(`${plural(files.length, 'Foto wird', 'Fotos werden')} hochgeladen …`, 0);
+  toast(tn('toast.photosUploading', files.length), 0);
   await runAction(async () => {
     const prepared = await Promise.all(files.map((file) => prepareFile(file, CAR_PHOTO_MAX)));
     upsertLocal('cars', await uploadFiles('cars', input.dataset.id, 'photos', prepared));
     route();
-    toast(`${plural(files.length, 'Foto', 'Fotos')} hinzugefügt`);
+    toast(tn('toast.photosAdded', files.length));
   });
 });
 
@@ -1257,7 +1300,7 @@ async function exportBackup() {
   let done = 0;
   const files = [];
   const addFile = async (path, name) => {
-    toast(`Backup wird erstellt … ${++done}/${total}`, 0);
+    toast(t('toast.exporting', { done: ++done, total }), 0);
     const blob = await fetchFile(path);
     files.push({ id: path, name, type: blob.type, data: await blobToDataUrl(blob) });
     return { id: path, name, type: blob.type };
@@ -1286,17 +1329,17 @@ async function exportBackup() {
   a.download = `carmaint-backup-${today()}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  toast('Backup exportiert');
+  toast(t('toast.exported'));
 }
 
 async function importBackup(data) {
-  if (!Array.isArray(data?.cars) || !Array.isArray(data?.entries)) throw new Error('Ungültige Backup-Datei.');
+  if (!Array.isArray(data?.cars) || !Array.isArray(data?.entries)) throw new Error(t('err.invalidBackup'));
   const files = new Map((Array.isArray(data.files) ? data.files : []).map((f) => [f.id, f]));
   const fileOf = (id, fallbackName) => {
     const f = files.get(id);
     if (!f?.data) return null;
     const blob = dataUrlToBlob(f.data);
-    return { blob, name: withExt(f.name || fallbackName || 'datei', blob.type) };
+    return { blob, name: withExt(f.name || fallbackName || 'file', blob.type) };
   };
 
   const oldCars = db.cars.map((c) => c.id);
@@ -1304,7 +1347,7 @@ async function importBackup(data) {
   const carIds = new Map();
   const total = data.cars.length + data.entries.length;
   let done = 0;
-  const progress = () => toast(`Import läuft … ${++done}/${total}`, 0);
+  const progress = () => toast(t('toast.importing', { done: ++done, total }), 0);
 
   try {
     for (const c of data.cars) {
@@ -1319,7 +1362,7 @@ async function importBackup(data) {
         info: c.info && typeof c.info === 'object' ? c.info : {},
       });
       created.push(car.id);
-      const photos = (Array.isArray(c.photos) ? c.photos : []).map((id) => fileOf(id, 'foto')).filter(Boolean);
+      const photos = (Array.isArray(c.photos) ? c.photos : []).map((id) => fileOf(id, 'photo')).filter(Boolean);
       if (photos.length) car = await uploadFiles('cars', car.id, 'photos', photos);
       carIds.set(c.id, car.id);
     }
@@ -1332,7 +1375,7 @@ async function importBackup(data) {
         type: TYPES[e.type] ? e.type : 'other',
         date: /^\d{4}-\d{2}-\d{2}$/.test(e.date) ? e.date : today(),
         mileage: num(e.mileage),
-        title: str(e.title) || 'Eintrag',
+        title: str(e.title) || t('import.entryFallback'),
         cost: num(e.cost),
         shop: str(e.shop),
         notes: str(e.notes),
@@ -1343,7 +1386,7 @@ async function importBackup(data) {
   } catch (err) {
     // Remove partially imported data; the existing data stays untouched.
     for (const id of created) await api('DELETE', rec('cars', id)).catch(() => {});
-    throw new Error(`Import abgebrochen: ${err.message}`);
+    throw new Error(t('err.importAborted', { message: err.message }));
   }
 
   // Only remove the previous vehicles after a successful import.
@@ -1353,7 +1396,7 @@ async function importBackup(data) {
   await loadData();
   location.hash = '#/';
   route();
-  toast(`${plural(data.cars.length, 'Fahrzeug', 'Fahrzeuge')} importiert`);
+  toast(tn('toast.imported', data.cars.length));
 }
 
 document.addEventListener('change', async (ev) => {
@@ -1366,10 +1409,10 @@ document.addEventListener('change', async (ev) => {
     try {
       data = JSON.parse(await file.text());
     } catch {
-      throw new Error('Ungültige Backup-Datei.');
+      throw new Error(t('err.invalidBackup'));
     }
     const count = Array.isArray(data?.cars) ? data.cars.length : 0;
-    if (!confirm(`Backup mit ${plural(count, 'Fahrzeug', 'Fahrzeugen')} importieren?\nDeine aktuellen Fahrzeuge werden dabei ersetzt.`)) return;
+    if (!confirm(t('confirm.import', { cars: tn('count.carsWith', count) }))) return;
     await importBackup(data);
   });
 });
@@ -1401,8 +1444,10 @@ async function start() {
   try {
     serverConfig = { ...serverConfig, ...(await api('GET', '/api/carmaint/config')) };
   } catch {}
+  setLanguage(initialLanguage());
   document.title = serverConfig.appName;
-  $('#appName').textContent = serverConfig.appName;
+  $('#appName').innerHTML = wordmark(serverConfig.appName);
+  $('#appName').setAttribute('aria-label', serverConfig.appName);
 
   if (auth?.token) {
     try {
@@ -1418,8 +1463,8 @@ async function start() {
     await enterApp();
   } catch (err) {
     console.error(err);
-    $('#app').innerHTML = emptyState('car', 'Keine Verbindung', esc(err.message),
-      '<button class="btn primary" onclick="location.reload()">Erneut versuchen</button>');
+    $('#app').innerHTML = emptyState('car', t('err.noConnection'), esc(err.message),
+      `<button class="btn primary" onclick="location.reload()">${t('btn.retry')}</button>`);
   }
 }
 

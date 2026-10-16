@@ -4,22 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CarMaint</title>
-  <meta name="description" content="Wartungs- und Reparaturheft für deine Fahrzeuge">
+  <meta name="description" content="Maintenance log for your vehicles">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%234f46e5'/><path d='M8 19h16M10 19l2-5h8l2 5M11 22.5a1.5 1.5 0 1 0 0-.01M21 22.5a1.5 1.5 0 1 0 0-.01' stroke='white' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="preload" href="fonts/anton-az.woff2" as="font" type="font/woff2" crossorigin>
   <script>
     try { const t = localStorage.getItem('carmaint:theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
   </script>
   <link rel="stylesheet" href="style.css">
+  <script src="i18n.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body class="logged-out">
   <header class="topbar">
     <div class="container topbar-inner">
-      <a href="#/" class="brand"><span class="brand-icon" data-icon="car"></span><span id="appName">CarMaint</span></a>
+      <a href="#/" class="brand logo" id="appName" aria-label="CarMaint"><span class="logo-a">CAR</span><span class="logo-b">MAINT</span></a>
       <div class="topbar-actions">
-        <button class="icon-btn" id="themeBtn" data-icon="contrast" title="Hell/Dunkel wechseln" aria-label="Hell/Dunkel wechseln"></button>
-        <a href="#/settings" class="icon-btn auth-only" data-icon="settings" title="Einstellungen" aria-label="Einstellungen"></a>
-        <button class="icon-btn auth-only" data-action="logout" data-icon="logout" title="Abmelden" aria-label="Abmelden"></button>
+        <button class="icon-btn" id="themeBtn" data-icon="contrast" data-i18n-title="nav.theme" data-i18n-aria="nav.theme"></button>
+        <a href="#/settings" class="icon-btn auth-only" data-icon="settings" data-i18n-title="nav.settings" data-i18n-aria="nav.settings"></a>
+        <button class="icon-btn auth-only" data-action="logout" data-icon="logout" data-i18n-title="nav.logout" data-i18n-aria="nav.logout"></button>
       </div>
     </div>
   </header>
@@ -28,117 +30,117 @@
 
   <dialog id="carDialog">
     <form id="carForm" autocomplete="off">
-      <h2 id="carDialogTitle">Neues Fahrzeug</h2>
+      <h2 id="carDialogTitle"></h2>
       <input type="hidden" name="id">
       <div class="row">
-        <label class="field">Marke *<input name="make" required maxlength="100" placeholder="z. B. VW"></label>
-        <label class="field">Modell *<input name="model" required maxlength="100" placeholder="z. B. Golf 7"></label>
+        <label class="field"><span><span data-i18n="car.make"></span> *</span><input name="make" required maxlength="100" data-i18n-placeholder="ph.make"></label>
+        <label class="field"><span><span data-i18n="car.model"></span> *</span><input name="model" required maxlength="100" data-i18n-placeholder="ph.model"></label>
       </div>
       <div class="row">
-        <label class="field">Baujahr<input name="year" type="number" min="1900" max="2100" placeholder="2018"></label>
-        <label class="field">Kennzeichen<input name="plate" maxlength="30" placeholder="ZH 123456"></label>
+        <label class="field"><span data-i18n="car.year"></span><input name="year" type="number" min="1900" max="2100" placeholder="2018"></label>
+        <label class="field"><span data-i18n="car.plate"></span><input name="plate" maxlength="30" placeholder="ZH 123456"></label>
       </div>
-      <label class="field">Kilometerstand<input name="mileage" type="number" min="0" placeholder="85000"></label>
-      <div class="field">Fotos
+      <label class="field"><span data-i18n="car.mileage"></span><input name="mileage" type="number" min="0" placeholder="85000"></label>
+      <div class="field"><span data-i18n="car.photos"></span>
         <label class="btn ghost file-btn" data-icon="image">
-          <span id="carPhotosLabel">Fotos auswählen</span>
+          <span id="carPhotosLabel" data-i18n="car.choosePhotos"></span>
           <input type="file" id="carPhotos" multiple accept="image/*" hidden>
         </label>
       </div>
       <p class="form-error" hidden></p>
       <div class="dialog-actions">
-        <button type="button" class="btn ghost" data-close>Abbrechen</button>
-        <button type="submit" class="btn primary">Speichern</button>
+        <button type="button" class="btn ghost" data-close data-i18n="btn.cancel"></button>
+        <button type="submit" class="btn primary" data-i18n="btn.save"></button>
       </div>
     </form>
   </dialog>
 
   <dialog id="entryDialog">
     <form id="entryForm" autocomplete="off">
-      <h2 id="entryDialogTitle">Neuer Eintrag</h2>
+      <h2 id="entryDialogTitle"></h2>
       <input type="hidden" name="id">
       <input type="hidden" name="car">
       <div class="row">
-        <label class="field">Art<select name="type" id="typeSelect"></select></label>
-        <label class="field">Datum *<input name="date" type="date" required></label>
+        <label class="field"><span data-i18n="entry.type"></span><select name="type" id="typeSelect"></select></label>
+        <label class="field"><span><span data-i18n="entry.date"></span> *</span><input name="date" type="date" required></label>
       </div>
-      <label class="field">Titel *<input name="title" required maxlength="200" placeholder="z. B. Ölwechsel + Filter"></label>
+      <label class="field"><span><span data-i18n="entry.title"></span> *</span><input name="title" required maxlength="200" data-i18n-placeholder="ph.title"></label>
       <div class="row">
-        <label class="field">Kilometerstand<input name="mileage" type="number" min="0"></label>
-        <label class="field"><span>Kosten (<span id="currencySymbol">€</span>)</span><input name="cost" type="number" min="0" step="0.01" placeholder="0,00"></label>
+        <label class="field"><span data-i18n="entry.mileage"></span><input name="mileage" type="number" min="0"></label>
+        <label class="field"><span><span data-i18n="entry.cost"></span> (<span id="currencySymbol">€</span>)</span><input name="cost" type="number" min="0" step="0.01" data-i18n-placeholder="ph.cost"></label>
       </div>
-      <label class="field">Werkstatt<input name="shop" maxlength="200" placeholder="z. B. Garage Müller"></label>
-      <label class="field">Notizen<textarea name="notes" rows="3" maxlength="5000" placeholder="Teile, Hinweise, nächste Fälligkeit …"></textarea></label>
-      <div class="field">Belege &amp; Fotos
+      <label class="field"><span data-i18n="entry.shop"></span><input name="shop" maxlength="200" data-i18n-placeholder="ph.shop"></label>
+      <label class="field"><span data-i18n="entry.notes"></span><textarea name="notes" rows="3" maxlength="5000" data-i18n-placeholder="ph.notes"></textarea></label>
+      <div class="field"><span data-i18n="entry.attachments"></span>
         <div class="att-editor" id="attEditor"></div>
         <label class="btn ghost file-btn" data-icon="paperclip">
-          Datei anhängen
+          <span data-i18n="entry.attach"></span>
           <input type="file" id="attInput" multiple accept="image/*,application/pdf" hidden>
         </label>
       </div>
       <p class="form-error" hidden></p>
       <div class="dialog-actions">
-        <button type="button" class="btn ghost" data-close>Abbrechen</button>
-        <button type="submit" class="btn primary">Speichern</button>
+        <button type="button" class="btn ghost" data-close data-i18n="btn.cancel"></button>
+        <button type="submit" class="btn primary" data-i18n="btn.save"></button>
       </div>
     </form>
   </dialog>
 
   <dialog id="infoDialog">
     <form id="infoForm" autocomplete="off">
-      <h2 id="infoDialogTitle">Fahrzeugdaten</h2>
+      <h2 id="infoDialogTitle"></h2>
       <input type="hidden" name="carId">
       <div id="infoFields"></div>
       <p class="form-error" hidden></p>
       <div class="dialog-actions">
-        <button type="button" class="btn ghost" data-close>Abbrechen</button>
-        <button type="submit" class="btn primary">Speichern</button>
+        <button type="button" class="btn ghost" data-close data-i18n="btn.cancel"></button>
+        <button type="submit" class="btn primary" data-i18n="btn.save"></button>
       </div>
     </form>
   </dialog>
 
   <dialog id="userDialog">
     <form id="userForm" autocomplete="off">
-      <h2>Neuer Benutzer</h2>
-      <label class="field">Benutzername *
-        <input name="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9._\-]+" autocapitalize="none" autocomplete="off" placeholder="z. B. anna">
+      <h2 data-i18n="user.new"></h2>
+      <label class="field"><span><span data-i18n="user.username"></span> *</span>
+        <input name="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9._\-]+" autocapitalize="none" autocomplete="off" data-i18n-placeholder="ph.username">
       </label>
-      <label class="field">Passwort *<input name="password" type="password" required minlength="8" autocomplete="new-password" placeholder="mindestens 8 Zeichen"></label>
-      <label class="field">Rolle
+      <label class="field"><span><span data-i18n="user.password"></span> *</span><input name="password" type="password" required minlength="8" autocomplete="new-password" data-i18n-placeholder="ph.password"></label>
+      <label class="field"><span data-i18n="user.role"></span>
         <select name="role">
-          <option value="user">Benutzer</option>
-          <option value="admin">Admin</option>
+          <option value="user" data-i18n="role.user"></option>
+          <option value="admin" data-i18n="role.admin"></option>
         </select>
       </label>
-      <p class="muted small">Erlaubt sind Buchstaben, Zahlen sowie . _ -</p>
+      <p class="muted small" data-i18n="user.allowedChars"></p>
       <p class="form-error" hidden></p>
       <div class="dialog-actions">
-        <button type="button" class="btn ghost" data-close>Abbrechen</button>
-        <button type="submit" class="btn primary">Anlegen</button>
+        <button type="button" class="btn ghost" data-close data-i18n="btn.cancel"></button>
+        <button type="submit" class="btn primary" data-i18n="btn.create"></button>
       </div>
     </form>
   </dialog>
 
   <dialog id="passwordDialog">
     <form id="passwordForm" autocomplete="off">
-      <h2 id="passwordDialogTitle">Passwort ändern</h2>
+      <h2 id="passwordDialogTitle"></h2>
       <input type="hidden" name="userId">
-      <label class="field" id="oldPasswordField">Aktuelles Passwort *<input name="oldPassword" type="password" autocomplete="current-password"></label>
-      <label class="field">Neues Passwort *<input name="password" type="password" required minlength="8" autocomplete="new-password" placeholder="mindestens 8 Zeichen"></label>
-      <label class="field">Neues Passwort wiederholen *<input name="passwordConfirm" type="password" required minlength="8" autocomplete="new-password"></label>
+      <label class="field" id="oldPasswordField"><span><span data-i18n="pw.current"></span> *</span><input name="oldPassword" type="password" autocomplete="current-password"></label>
+      <label class="field"><span><span data-i18n="pw.new"></span> *</span><input name="password" type="password" required minlength="8" autocomplete="new-password" data-i18n-placeholder="ph.password"></label>
+      <label class="field"><span><span data-i18n="pw.repeat"></span> *</span><input name="passwordConfirm" type="password" required minlength="8" autocomplete="new-password"></label>
       <p class="form-error" hidden></p>
       <div class="dialog-actions">
-        <button type="button" class="btn ghost" data-close>Abbrechen</button>
-        <button type="submit" class="btn primary">Speichern</button>
+        <button type="button" class="btn ghost" data-close data-i18n="btn.cancel"></button>
+        <button type="submit" class="btn primary" data-i18n="btn.save"></button>
       </div>
     </form>
   </dialog>
 
   <dialog id="lightbox" class="lightbox">
     <img id="lbImg" alt="">
-    <button class="icon-btn lb-btn lb-close" data-close data-icon="x" aria-label="Schließen"></button>
-    <button class="icon-btn lb-btn lb-prev" data-lb="-1" data-icon="chevronLeft" aria-label="Vorheriges Bild"></button>
-    <button class="icon-btn lb-btn lb-next" data-lb="1" data-icon="chevronRight" aria-label="Nächstes Bild"></button>
+    <button class="icon-btn lb-btn lb-close" data-close data-icon="x" data-i18n-aria="lb.close"></button>
+    <button class="icon-btn lb-btn lb-prev" data-lb="-1" data-icon="chevronLeft" data-i18n-aria="lb.prev"></button>
+    <button class="icon-btn lb-btn lb-next" data-lb="1" data-icon="chevronRight" data-i18n-aria="lb.next"></button>
     <p id="lbCaption"></p>
   </dialog>
 

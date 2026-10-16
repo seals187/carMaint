@@ -16,6 +16,9 @@
   --c-purple: #9333ea;
   --c-gray: #64748b;
   --radius: 16px;
+  /* Logo colours (from the banner); orange slightly darker in light mode for contrast */
+  --logo-a: #14161a;
+  --logo-b: #ea5a0c;
   color-scheme: light;
 }
 
@@ -37,6 +40,8 @@
     --c-green: #4ade80;
     --c-purple: #c084fc;
     --c-gray: #94a3b8;
+    --logo-a: #f2efe8;
+    --logo-b: #ff6b1a;
     color-scheme: dark;
   }
 }
@@ -58,7 +63,17 @@
   --c-green: #4ade80;
   --c-purple: #c084fc;
   --c-gray: #94a3b8;
+  --logo-a: #f2efe8;
+  --logo-b: #ff6b1a;
   color-scheme: dark;
+}
+
+/* Logo font: Anton (SIL OFL, see fonts/Anton-OFL.txt), subset to A–Z */
+@font-face {
+  font-family: 'Anton';
+  src: url('fonts/anton-az.woff2') format('woff2');
+  font-display: swap;
+  unicode-range: U+41-5A;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -95,11 +110,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-bottom: 1px solid var(--border);
 }
 .topbar-inner { display: flex; align-items: center; justify-content: space-between; height: 60px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
-.brand-icon {
-  display: grid; place-items: center; width: 32px; height: 32px;
-  border-radius: 9px; background: var(--accent); color: #fff;
+.logo {
+  font-family: 'Anton', 'Arial Narrow', Impact, sans-serif;
+  font-weight: 400; text-transform: uppercase; letter-spacing: .01em; line-height: 1;
 }
+.logo-a { color: var(--logo-a); }
+.logo-b { color: var(--logo-b); }
+.brand { display: flex; align-items: center; font-size: 1.6rem; }
 .topbar-actions { display: flex; gap: 4px; }
 
 /* Buttons */
@@ -273,12 +290,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .logged-out .auth-only { display: none; }
 .login { display: grid; place-items: center; min-height: calc(100dvh - 61px); padding: 32px 0; }
 .login-card { display: flex; flex-direction: column; gap: 16px; width: min(380px, 100%); padding: 32px 28px; }
-.login-card h1 { font-size: 1.5rem; margin-bottom: 4px; }
-.login-logo {
-  display: grid; place-items: center; width: 56px; height: 56px;
-  border-radius: 16px; background: var(--accent); color: #fff;
+.login-card h1.logo-lg { font-size: 3rem; margin-bottom: 10px; letter-spacing: .01em; }
+.lang-switch { display: flex; justify-content: center; gap: 4px; }
+.lang-switch button {
+  padding: 4px 10px; border: 0; border-radius: 8px; background: none;
+  color: var(--muted); font-size: .8rem; font-weight: 600; letter-spacing: .04em; cursor: pointer;
 }
-.login-logo .ic { width: 28px; height: 28px; }
+.lang-switch button:hover { color: var(--text); }
+.lang-switch button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); }
 .btn.block { width: 100%; justify-content: center; margin-top: 4px; }
 
 .form-error {

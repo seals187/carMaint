@@ -9,12 +9,14 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 ### Added
 - GitHub releases are created automatically for every version tag, with notes from this changelog
 - Banner image in the README
+- English user interface: switch the language under Settings or on the login page; `DEFAULT_LANGUAGE` sets the default
 
 ### Changed
 - Docker base image updated to Alpine 3.24
+- New text logo in the app (CAR + MAINT, colours from the banner, Anton font bundled locally)
 - GitHub Actions updated to Node.js 24 versions; Dependabot keeps actions and the base image up to date
 - README, changelog, configuration template and code comments translated to English
-- README: separate installation guides for Linux (Docker Engine) and Windows (Docker Desktop), troubleshooting
+- README shortened: compact installation for Linux (Docker Engine) and Windows (Docker Desktop)
 
 ## [0.1.0] – 2026-10-16
 

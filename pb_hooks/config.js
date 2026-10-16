@@ -10,12 +10,15 @@ const env = (key, fallback = '') => {
 
 const CURRENCIES = ['EUR', 'CHF', 'USD'];
 const currency = env('DEFAULT_CURRENCY', 'EUR').toUpperCase();
+const LANGUAGES = ['de', 'en'];
+const language = env('DEFAULT_LANGUAGE', 'de').toLowerCase();
 
 module.exports = {
   appName: env('APP_NAME', 'CarMaint'),
   version: env('APP_VERSION', 'dev'), // set in the Docker image
   appUrl: env('APP_URL').replace(/\/+$/, ''),
   defaultCurrency: CURRENCIES.includes(currency) ? currency : 'EUR',
+  defaultLanguage: LANGUAGES.includes(language) ? language : 'de',
 
   adminUsername: env('ADMIN_USERNAME'),
   adminPassword: env('ADMIN_PASSWORD'),
