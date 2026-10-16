@@ -6,25 +6,96 @@ A maintenance and repair log for your vehicles, with photos, receipts, vehicle d
 - **Backend:** [PocketBase](https://pocketbase.io): SQLite database, authentication, file storage, admin UI
 - **Deployment:** a single Docker container, configured via `.env`
 
-## Quick start with Docker
+## Installation
 
-The server only needs two files. The image is pulled ready-made from ghcr.io:
+CarMaint runs as a single container. You only need two files – `docker-compose.yml` and `.env` –
+the image itself is pulled ready-made from `ghcr.io/seals187/carmaint`.
+
+The image is available for amd64 (PC, VPS, VM, LXC on Proxmox) as well as arm64 and armv7
+(Raspberry Pi). Docker automatically pulls the matching variant.
+
+### Before you start: private repository or package?
+
+The commands below download files from GitHub and pull the image from ghcr.io **without logging in**.
+That only works if both are public. If they are private:
+
+- **Image (ghcr.io):** log in to the registry once. The password is a
+  [personal access token (classic)](https://github.com/settings/tokens) with the `read:packages`
+  scope – **not** your GitHub password.
+  ```bash
+  docker login ghcr.io -u seals187
+  ```
+  Without this login, `docker compose up` fails with `error from registry: unauthorized`.
+- **Files (repository):** instead of downloading them, get `docker-compose.yml` and `.env.example`
+  via `git clone https://github.com/seals187/carMaint.git` (asks for your GitHub login) or copy
+  them from your local checkout.
+
+To make the image public: GitHub → your profile → **Packages** → `carmaint` → **Package settings**
+→ **Change visibility** → **Public**. The image contains only program code – no data and no
+passwords (those live in `.env` and the Docker volume).
+
+### Linux (Docker Engine)
+
+Requirements: [Docker Engine](https://docs.docker.com/engine/install/) with the Compose plugin
+(`docker compose version` must work). Works the same on a VPS, a Linux VM, an LXC container on
+Proxmox (with nesting enabled) and a Raspberry Pi.
 
 ```bash
-mkdir carmaint && cd carmaint
+mkdir ~/carmaint && cd ~/carmaint
 curl -fsSLO https://raw.githubusercontent.com/seals187/carMaint/main/docker-compose.yml
 curl -fsSL  https://raw.githubusercontent.com/seals187/carMaint/main/.env.example -o .env
 nano .env                 # adjust, at least ADMIN_PASSWORD!
 docker compose up -d
 ```
 
-Then open `http://<server>:8090` and sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
+Open `http://<server-ip>:8090` and sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
+If your user is not in the `docker` group, prefix the `docker` commands with `sudo`.
 
-The image is available for amd64 (VPS, VM, LXC on Proxmox) as well as arm64 and armv7 (Raspberry Pi).
-Docker automatically pulls the matching variant.
+### Windows (Docker Desktop)
 
-> If the package on ghcr.io is private, log in on the server first:
-> `docker login ghcr.io -u seals187` (password = a token with the `read:packages` scope).
+Requirements: [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
+with the WSL 2 backend. Start Docker Desktop and wait until it shows *Engine running*.
+
+Run the following in **PowerShell**:
+
+```powershell
+mkdir C:\carmaint; cd C:\carmaint
+Invoke-WebRequest https://raw.githubusercontent.com/seals187/carMaint/main/docker-compose.yml -OutFile docker-compose.yml
+Invoke-WebRequest https://raw.githubusercontent.com/seals187/carMaint/main/.env.example -OutFile .env
+notepad .env              # adjust, at least ADMIN_PASSWORD!
+docker compose up -d
+```
+
+Open `http://localhost:8090` and sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
+
+> In Windows PowerShell, `curl` is an alias for `Invoke-WebRequest` and does not understand
+> options like `-fsSLO`. Use the commands above, or call the real curl explicitly as `curl.exe`.
+
+The container also shows up in the Docker Desktop UI under **Containers**, where you can
+start, stop and view its logs. The data is stored in the volume `carmaint_data` (**Volumes**).
+
+### Useful commands (Linux and Windows)
+
+Run them in the folder that contains `docker-compose.yml`:
+
+| Command | Purpose |
+|---|---|
+| `docker compose ps` | Show status (should become `healthy`) |
+| `docker compose logs -f` | Follow the logs (stop with Ctrl+C) |
+| `docker compose up -d` | Apply changes to `.env` (recreates the container) |
+| `docker compose restart` | Restart without applying `.env` changes |
+| `docker compose down` | Stop and remove the container (data in the volume is kept) |
+| `docker compose pull && docker compose up -d` | Update to a newer image |
+
+### Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| `error from registry: unauthorized` / `denied` | The image is private – run `docker login ghcr.io` (see above) or make the package public |
+| `404` when downloading the files | The repository is private – use `git clone` or copy the files |
+| Login does not work after the first start | `ADMIN_PASSWORD` must be at least 8 characters; check `docker compose logs` |
+| Port 8090 is already in use | Set another `PORT` in `.env`, e.g. `PORT=8091` |
+| Forgot the admin password | Set `ADMIN_RESET_PASSWORD=true` and a new `ADMIN_PASSWORD`, run `docker compose up -d`, then set it back to `false` |
 
 ## Configuration (`.env`)
 

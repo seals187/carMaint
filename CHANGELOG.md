@@ -12,6 +12,7 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 ### Changed
 - GitHub Actions updated to Node.js 24 versions; Dependabot keeps actions and the base image up to date
 - README, changelog, configuration template and code comments translated to English
+- README: separate installation guides for Linux (Docker Engine) and Windows (Docker Desktop), troubleshooting
 
 ## [0.1.0] – 2026-10-16
 
