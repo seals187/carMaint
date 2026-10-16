@@ -1,5 +1,5 @@
 # CarMaint – PocketBase serves both the API and the website (pb_public) from a single container.
-FROM alpine:3.22
+FROM alpine:3.24
 
 ARG PB_VERSION=0.40.5
 # Set automatically by "docker buildx" (amd64, arm64, arm)
