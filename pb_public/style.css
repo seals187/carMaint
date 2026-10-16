@@ -151,7 +151,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; padding-bottom: 40px; }
 
 .car-card { position: relative; display: flex; flex-direction: column; overflow: hidden; transition: border-color .15s; }
-/* Der Titel-Link deckt die ganze Karte ab, der Werkzeug-Button liegt darüber. */
+/* The title link covers the whole card; the wrench button sits on top of it. */
 .card-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
 .card-link:focus-visible { outline: none; }
 .card-link:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius); }
@@ -225,10 +225,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .thumb.add:hover { border-color: var(--accent); color: var(--accent); }
 
-/* Fotos + Infobox */
+/* Photos + info box */
 .car-overview { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; margin-bottom: 28px; }
 .car-overview .photo-grid { margin-bottom: 0; }
-/* overflow + margin-top:-1px blenden die obere Trennlinie der ersten sichtbaren Zeile aus */
+/* overflow + margin-top:-1px hide the top divider of the first visible row */
 .infobox { padding: 0 18px; overflow: hidden; }
 .info-list { margin: -1px 0 0; }
 .info-list div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 10px 0; border-top: 1px solid var(--border); font-size: .9rem; }

@@ -1,6 +1,6 @@
 services:
   carmaint:
-    # Version über CARMAINT_VERSION in der .env (latest = neuestes Release, edge = Entwicklungsstand)
+    # Version via CARMAINT_VERSION in .env (latest = newest release, edge = development state)
     image: ghcr.io/seals187/carmaint:${CARMAINT_VERSION:-latest}
     container_name: carmaint
     restart: unless-stopped
@@ -11,5 +11,5 @@ services:
       - carmaint_data:/pb/pb_data
 
 volumes:
-  # Datenbank, Fotos, Belege und PocketBase-Backups
+  # Database, photos, receipts and PocketBase backups
   carmaint_data:

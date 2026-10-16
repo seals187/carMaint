@@ -1,7 +1,7 @@
 /// <reference path="../pb_data/types.d.ts" />
 
-// Liest die Konfiguration aus Umgebungsvariablen (.env bzw. docker-compose env_file).
-// Wird per require() aus den Hooks geladen, da jeder Hook-Handler isoliert läuft.
+// Reads the configuration from environment variables (.env or docker-compose env_file).
+// Loaded via require() from the hooks, since every hook handler runs in isolation.
 
 const env = (key, fallback = '') => {
   const value = ($os.getenv(key) || '').trim();
@@ -13,7 +13,7 @@ const currency = env('DEFAULT_CURRENCY', 'EUR').toUpperCase();
 
 module.exports = {
   appName: env('APP_NAME', 'CarMaint'),
-  version: env('APP_VERSION', 'dev'), // wird im Docker-Image gesetzt
+  version: env('APP_VERSION', 'dev'), // set in the Docker image
   appUrl: env('APP_URL').replace(/\/+$/, ''),
   defaultCurrency: CURRENCIES.includes(currency) ? currency : 'EUR',
 

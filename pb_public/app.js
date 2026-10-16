@@ -2,9 +2,9 @@
 
 const THEME_KEY = 'carmaint:theme';
 const AUTH_KEY = 'carmaint:auth';
-const CAR_PHOTO_MAX = 1600;               // px, längste Seite
-const ATTACHMENT_MAX = 2000;              // Belege etwas größer, damit Text lesbar bleibt
-const UPLOAD_CHUNK = 24 * 1024 * 1024;    // pro Anfrage unter dem Server-Limit (32 MB) bleiben
+const CAR_PHOTO_MAX = 1600;               // px, longest side
+const ATTACHMENT_MAX = 2000;              // receipts slightly larger so text stays readable
+const UPLOAD_CHUNK = 24 * 1024 * 1024;    // stay below the server limit (32 MB) per request
 
 const CURRENCIES = {
   EUR: { label: 'Euro',              locale: 'de-DE' },
@@ -56,7 +56,7 @@ const num = (v) => (v === '' || v == null ? null : Number(v));
 const str = (v) => (v == null ? '' : String(v)).trim();
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const isImageName = (name) => /\.(jpe?g|png|webp|gif|bmp|avif)$/i.test(name);
-// Der Server hängt an Dateinamen "_<10 Zeichen>" an – für die Anzeige wieder entfernen.
+// The server appends "_<10 chars>" to file names – strip it again for display.
 const displayName = (name) => name.replace(/_[a-z0-9]{10}(\.[^.]+)$/i, '$1');
 
 let settings = { ...DEFAULT_SETTINGS };
@@ -79,13 +79,13 @@ const today = () => {
   return d.toISOString().slice(0, 10);
 };
 
-// Fahrzeugdaten der Infobox. `format` liefert sicheres HTML für die Anzeige.
+// Vehicle data shown in the info box. `format` returns safe HTML for display.
 const INFO_FIELDS = [
   { group: 'Kauf', key: 'purchasePrice', label: () => `Kaufpreis (${currencySymbol()})`, display: 'Kaufpreis', type: 'number', step: '0.01', format: (v) => money.format(v) },
   { group: 'Kauf', key: 'purchaseDate', label: 'Kaufdatum', type: 'date', format: fmtDate },
   { group: 'Zulassung', key: 'firstRegistration', label: '1. Inverkehrsetzung', type: 'date', format: fmtDate },
   { group: 'Zulassung', key: 'stammnummer', label: 'Stammnummer', placeholder: '123.456.789', format: (v) => `<span class="mono">${esc(v)}</span>` },
-  // pinned: bleibt auch bei zugeklappter Infobox sichtbar
+  // pinned: stays visible even when the info box is collapsed
   { group: 'Zulassung', key: 'vin', label: 'Fahrgestellnummer', placeholder: 'WVWZZZ1KZAW000000', upper: true, pinned: true, format: (v) => `<span class="mono">${esc(v)}</span>` },
   { group: 'Zulassung', key: 'typeApproval', label: 'Typengenehmigung', placeholder: '1VA123', upper: true, pinned: true },
   { group: 'Technik', key: 'power', label: 'Leistung (kW)', display: 'Leistung', type: 'number', format: (v) => `${number.format(v)} kW · ${number.format(Math.round(v * 1.35962))} PS` },
@@ -183,7 +183,7 @@ async function listAll(collection, query = '') {
   }
 }
 
-// Dateien werden in Paketen angehängt, damit eine Anfrage nie zu groß wird.
+// Files are attached in batches so a single request never gets too large.
 async function uploadFiles(collection, id, field, files) {
   let record = null;
   let batch = new FormData();
@@ -206,10 +206,10 @@ async function uploadFiles(collection, id, field, files) {
   return record;
 }
 
-/* ---------- Geschützte Dateien ---------- */
+/* ---------- Protected files ---------- */
 
-// Fotos und Belege brauchen ein kurzlebiges Datei-Token. Geladene Bilder werden
-// als Object-URL zwischengespeichert, damit sie beim Neuzeichnen nicht neu laden.
+// Photos and receipts require a short-lived file token. Loaded images are
+// cached as object URLs so they do not reload when the view re-renders.
 let fileTokenCache = { promise: null, at: 0 };
 const blobCache = new Map();
 
@@ -252,7 +252,7 @@ function forgetFiles(prefix = '') {
   }
 }
 
-// Bilder werden als <img data-file="…" data-thumb="…"> gerendert und hier nachgeladen.
+// Images are rendered as <img data-file="…" data-thumb="…"> and loaded here.
 function hydrate() {
   for (const img of document.querySelectorAll('img[data-file]:not([data-loading])')) {
     img.dataset.loading = '1';
@@ -266,7 +266,7 @@ const carFile = (car, name) => `cars/${car.id}/${name}`;
 const entryFile = (entry, name) => `entries/${entry.id}/${name}`;
 const attachmentLabel = (entry, name) => entry?.attachmentNames?.[name] || displayName(name);
 
-// Lädt Anhänge hoch und merkt sich ihre Originalnamen (der Server bereinigt Dateinamen).
+// Uploads attachments and remembers their original names (the server sanitizes file names).
 async function uploadAttachments(entry, files) {
   const before = new Set(entry.attachments);
   const updated = await uploadFiles('entries', entry.id, 'attachments', files);
@@ -325,11 +325,11 @@ function openFile(url, name) {
   a.href = url;
   a.target = '_blank';
   a.rel = 'noopener';
-  if (!/\.pdf$/i.test(name)) a.download = name; // PDFs im neuen Tab öffnen, alles andere herunterladen
+  if (!/\.pdf$/i.test(name)) a.download = name; // open PDFs in a new tab, download everything else
   a.click();
 }
 
-/* ---------- Daten ---------- */
+/* ---------- Data ---------- */
 
 let serverConfig = { appName: 'CarMaint', defaultCurrency: 'EUR', version: 'dev' };
 let db = { cars: [], entries: [] };
@@ -362,7 +362,7 @@ function applyUserSettings() {
   money = currencyFormat(s.currency);
 }
 
-// Einstellungen gehören zum Benutzerkonto und gelten auf allen Geräten.
+// Settings belong to the user account and apply on all devices.
 async function saveSettings(next) {
   settings = { ...settings, ...next };
   money = currencyFormat(settings.currency);
@@ -375,7 +375,7 @@ async function saveSettings(next) {
   }
 }
 
-/* ---------- Anmeldung ---------- */
+/* ---------- Authentication ---------- */
 
 async function login(username, password) {
   try {
@@ -444,7 +444,7 @@ function renderLogin() {
   });
 }
 
-/* ---------- Ansichten ---------- */
+/* ---------- Views ---------- */
 
 let currentCarId = null;
 let filter = { type: 'all', q: '' };
@@ -793,7 +793,7 @@ function entryItem(e) {
     </li>`;
 }
 
-/* ---------- Dialoge ---------- */
+/* ---------- Dialogs ---------- */
 
 const carDialog = $('#carDialog');
 const carForm = $('#carForm');
@@ -876,7 +876,7 @@ carForm.addEventListener('submit', (ev) => {
   });
 });
 
-// Anhänge im Eintrags-Dialog: vorhandene behalten/entfernen, neue vormerken.
+// Attachments in the entry dialog: keep/remove existing ones, queue new ones.
 let draft = { entry: null, keep: [], add: [] };
 
 function renderDraft() {
@@ -1030,7 +1030,7 @@ passwordForm.addEventListener('submit', (ev) => {
     if (self) body.oldPassword = f.oldPassword;
     await api('PATCH', rec('users', f.userId), body);
     if (self) {
-      // Nach einer Passwortänderung sind alte Sitzungen ungültig – direkt neu anmelden.
+      // Changing the password invalidates old sessions – sign in again right away.
       const username = me().username;
       setAuth({ ...auth, token: '' });
       await login(username, f.password);
@@ -1063,7 +1063,7 @@ for (const dialog of [carDialog, entryDialog, infoDialog, userDialog, passwordDi
   });
 }
 
-/* ---------- Bildbetrachter ---------- */
+/* ---------- Image viewer ---------- */
 
 const lb = { files: [], index: 0 };
 
@@ -1104,7 +1104,7 @@ document.addEventListener('keydown', (ev) => {
   if (ev.key === 'ArrowRight') stepLightbox(1);
 });
 
-/* ---------- Aktionen ---------- */
+/* ---------- Actions ---------- */
 
 async function runAction(fn) {
   try {
@@ -1251,7 +1251,7 @@ document.addEventListener('change', async (ev) => {
 
 /* ---------- Backup ---------- */
 
-// Format (version 2) ist kompatibel zu den Backups der früheren Browser-Version.
+// Format (version 2) is compatible with backups from the former browser-only version.
 async function exportBackup() {
   const total = db.cars.reduce((n, c) => n + c.photos.length, 0) + db.entries.reduce((n, e) => n + e.attachments.length, 0);
   let done = 0;
@@ -1341,12 +1341,12 @@ async function importBackup(data) {
       if (atts.length) await uploadAttachments(entry, atts);
     }
   } catch (err) {
-    // Halb importierte Daten wieder entfernen, die bisherigen bleiben unangetastet.
+    // Remove partially imported data; the existing data stays untouched.
     for (const id of created) await api('DELETE', rec('cars', id)).catch(() => {});
     throw new Error(`Import abgebrochen: ${err.message}`);
   }
 
-  // Erst nach erfolgreichem Import die bisherigen Fahrzeuge entfernen.
+  // Only remove the previous vehicles after a successful import.
   for (const id of oldCars) await api('DELETE', rec('cars', id)).catch(() => {});
   if (CURRENCIES[data.settings?.currency]) await saveSettings({ currency: data.settings.currency });
   forgetFiles();
@@ -1383,7 +1383,7 @@ $('#themeBtn').addEventListener('click', () => {
   try { localStorage.setItem(THEME_KEY, root.dataset.theme); } catch {}
 });
 
-// duration 0 = bleibt stehen, bis die nächste Meldung kommt
+// duration 0 = stays visible until the next message
 function toast(msg, duration = 2200) {
   const el = $('#toast');
   el.textContent = msg;

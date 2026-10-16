@@ -1,10 +1,10 @@
-# CarMaint – PocketBase liefert API und Website (pb_public) aus einem Container aus.
+# CarMaint – PocketBase serves both the API and the website (pb_public) from a single container.
 FROM alpine:3.22
 
 ARG PB_VERSION=0.40.5
-# Wird von "docker buildx" automatisch gesetzt (amd64, arm64, arm)
+# Set automatically by "docker buildx" (amd64, arm64, arm)
 ARG TARGETARCH
-# CarMaint-Version, wird vom GitHub-Workflow gesetzt (z. B. 0.1.0 oder edge)
+# CarMaint version, set by the GitHub workflow (e.g. 0.1.0 or edge)
 ARG VERSION=dev
 
 RUN set -eux; \
@@ -14,7 +14,7 @@ RUN set -eux; \
       amd64|x86_64)  arch=amd64 ;; \
       arm64|aarch64) arch=arm64 ;; \
       arm|armv7l)    arch=armv7 ;; \
-      *) echo "Nicht unterstützte Architektur: $arch" >&2; exit 1 ;; \
+      *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; \
     esac; \
     zip="pocketbase_${PB_VERSION}_linux_${arch}.zip"; \
     base="https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}"; \
@@ -45,7 +45,7 @@ EXPOSE 8090
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8090/api/health > /dev/null || exit 1
 
-# --encryptionEnv: verschlüsselt die Server-Einstellungen, wenn PB_ENCRYPTION_KEY gesetzt ist
+# --encryptionEnv: encrypts the server settings when PB_ENCRYPTION_KEY is set
 CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8090", "--dir=/pb/pb_data", \
      "--publicDir=/pb/pb_public", "--hooksDir=/pb/pb_hooks", "--migrationsDir=/pb/pb_migrations", \
      "--encryptionEnv=PB_ENCRYPTION_KEY", "--automigrate=false"]

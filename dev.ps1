@@ -1,5 +1,5 @@
-# Startet CarMaint lokal unter Windows (ohne Docker).
-# Lädt PocketBase beim ersten Start nach .\bin herunter und liest die .env.
+# Runs CarMaint locally on Windows (without Docker).
+# Downloads PocketBase into .\bin on first start and reads .env.
 #
 #   powershell -ExecutionPolicy Bypass -File .\dev.ps1
 
@@ -9,7 +9,7 @@ $Root = $PSScriptRoot
 $Exe = Join-Path $Root 'bin\pocketbase.exe'
 
 if (-not (Test-Path $Exe)) {
-    Write-Host "PocketBase $PbVersion wird heruntergeladen ..."
+    Write-Host "Downloading PocketBase $PbVersion ..."
     New-Item -ItemType Directory -Force (Join-Path $Root 'bin') | Out-Null
     $zip = Join-Path $env:TEMP "pocketbase_$PbVersion.zip"
     $url = "https://github.com/pocketbase/pocketbase/releases/download/v$PbVersion/pocketbase_${PbVersion}_windows_amd64.zip"
@@ -19,7 +19,7 @@ if (-not (Test-Path $Exe)) {
     Remove-Item $zip
 }
 
-# .env laden (KEY=VALUE, Kommentare mit #)
+# Load .env (KEY=VALUE, comments start with #)
 $envFile = Join-Path $Root '.env'
 if (Test-Path $envFile) {
     foreach ($line in Get-Content $envFile -Encoding UTF8) {
@@ -29,11 +29,11 @@ if (Test-Path $envFile) {
         }
     }
 } else {
-    Write-Warning '.env fehlt - kopiere .env.example nach .env und passe sie an.'
+    Write-Warning '.env is missing - copy .env.example to .env and adjust it.'
 }
 
 $port = if ($env:PORT) { $env:PORT } else { '8090' }
-Write-Host "CarMaint laeuft auf http://localhost:$port  (Beenden mit Strg+C)"
+Write-Host "CarMaint is running at http://localhost:$port  (stop with Ctrl+C)"
 
 & $Exe serve "--http=127.0.0.1:$port" `
     "--dir=$Root\pb_data" `

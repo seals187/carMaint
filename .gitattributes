@@ -1,4 +1,4 @@
-# Einheitlich LF (Linux-Server / Docker), nur PowerShell-Skripte mit CRLF
+# Consistent LF line endings (Linux server / Docker), CRLF only for PowerShell scripts
 * text=auto eol=lf
 *.ps1 text eol=crlf
 *.png binary

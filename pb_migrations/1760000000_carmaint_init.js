@@ -1,7 +1,7 @@
 /// <reference path="../pb_data/types.d.ts" />
 
-// Grundschema von CarMaint: Benutzer (Login per Benutzername), Fahrzeuge, Einträge.
-// Jeder Benutzer sieht nur seine eigenen Fahrzeuge und deren Einträge.
+// Base schema of CarMaint: users (login by username), cars, entries.
+// Every user only sees their own cars and the entries belonging to them.
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/avif'];
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -24,9 +24,9 @@ migrate((app) => {
   users.addIndex('idx_users_username', true, 'username', '');
 
   users.passwordAuth.identityFields = ['username'];
-  users.authAlert.enabled = false; // kein Mailversand konfiguriert
+  users.authAlert.enabled = false; // no mail delivery configured
 
-  // Eigenes Konto sehen/bearbeiten (ohne Rolle zu ändern); Admins verwalten alle Benutzer.
+  // Users can view/edit their own account (without changing the role); admins manage all users.
   users.listRule = 'id = @request.auth.id || @request.auth.role = "admin"';
   users.viewRule = 'id = @request.auth.id || @request.auth.role = "admin"';
   users.createRule = '@request.auth.role = "admin"';
@@ -95,8 +95,8 @@ migrate((app) => {
         thumbs: ['128x128'],
         protected: true,
       },
-      // Originalnamen der Anhänge ({ gespeicherterName: "Rechnung März.pdf" }),
-      // da der Server Dateinamen bereinigt (Umlaute, Leerzeichen).
+      // Original attachment names ({ storedName: "Rechnung März.pdf" }),
+      // since the server sanitizes file names (umlauts, spaces).
       { type: 'json', name: 'attachmentNames', maxSize: 20000 },
       { type: 'autodate', name: 'created', onCreate: true },
       { type: 'autodate', name: 'updated', onCreate: true, onUpdate: true },
