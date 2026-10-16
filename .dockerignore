@@ -1,0 +1,8 @@
+.env
+.git
+.idea
+pb_data
+bin
+legacy
+*.md
+dev.ps1

@@ -1,0 +1,15 @@
+services:
+  carmaint:
+    build: .
+    image: carmaint:latest
+    container_name: carmaint
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${PORT:-8090}:8090"
+    volumes:
+      - carmaint_data:/pb/pb_data
+
+volumes:
+  # Datenbank, Fotos, Belege und PocketBase-Backups
+  carmaint_data:

@@ -1,0 +1,5 @@
+# Einheitlich LF (Linux-Server / Docker), nur PowerShell-Skripte mit CRLF
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.jpg binary
