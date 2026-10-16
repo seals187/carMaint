@@ -56,7 +56,7 @@ Alle Daten liegen im Docker-Volume `carmaint_data` (Datenbank + Dateien).
 
 ### Daten aus der alten Browser-Version übernehmen
 
-Die frühere Version (Daten nur im Browser) liegt in `legacy/`.
+Die frühere Version (Daten nur im Browser) liegt nur lokal im Ordner `legacy/` (nicht im Repository).
 
 1. `legacy/index.html` **im selben Browser und über dieselbe Adresse wie bisher** öffnen
    (z. B. in WebStorm: Rechtsklick → *Open in Browser*).
@@ -102,5 +102,4 @@ pb_public/       Website (index.html, style.css, app.js)
 pb_migrations/   Datenbank-Schema und Zugriffsregeln
 pb_hooks/        Server-Logik: .env lesen, Admin anlegen, /api/carmaint/config
 Dockerfile       Image (Alpine + PocketBase, läuft als Nicht-Root-Benutzer)
-legacy/          Alte Browser-Version – nur noch zum Exportieren der Daten
 ```
