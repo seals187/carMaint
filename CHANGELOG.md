@@ -6,6 +6,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.1.1] – 2026-10-17
+
 ### Added
 - GitHub releases are created automatically for every version tag, with notes from this changelog
 - Banner image in the README
@@ -28,5 +30,6 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/seals187/carMaint/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/seals187/carMaint/releases/tag/v0.1.0
