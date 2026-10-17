@@ -6,6 +6,9 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+### Changed
+- Favicon is easier to see in browser tabs: orange background with a dark speedometer; the same icon is used for the iOS home screen and as `favicon.ico`
+
 ## [0.1.4] – 2026-10-17
 
 ### Added
