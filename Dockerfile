@@ -35,7 +35,8 @@ COPY pb_public /pb/pb_public
 
 ENV APP_VERSION=${VERSION}
 LABEL org.opencontainers.image.title="CarMaint" \
-      org.opencontainers.image.version="${VERSION}"
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
 
 USER carmaint
 WORKDIR /pb

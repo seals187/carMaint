@@ -5,6 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/seals187/carMaint?color=ff6b1a)](https://github.com/seals187/carMaint/releases)
 [![Live demo](https://img.shields.io/badge/demo-online-111214?logo=googlechrome&logoColor=white)](https://cm-demo.seals187.com)
 [![Discord](https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/8DU3XPFJQ6)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 A lightweight, self-hosted maintenance log for your vehicles: services, repairs, inspections,
 costs, photos and receipts – with multi-user login. Runs as a single Docker container.
@@ -99,3 +100,8 @@ Or build the image locally: `docker build -t ghcr.io/seals187/carmaint:dev .`
 Versioning follows [SemVer](https://semver.org/) (`0.x` = initial development); changes are listed in
 [CHANGELOG.md](CHANGELOG.md). Pushing a tag `vX.Y.Z` publishes the Docker image
 (`ghcr.io/seals187/carmaint`) and a GitHub release. Pushes to `main` publish the `edge` image.
+
+## License
+
+CarMaint is free software under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+If you run a modified version as a public service, you must make its source code available to its users.
