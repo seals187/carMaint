@@ -48,7 +48,7 @@ All settings live in `.env` – see [`.env.example`](.env.example) for every opt
 | Variable | Description |
 |---|---|
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | First user (admin), created on first start. Password min. 8 characters |
-| `CARMAINT_VERSION` | `latest`, a fixed version such as `0.1.0`, or `edge` |
+| `CARMAINT_VERSION` | `latest`, a fixed version such as `0.1.3`, or `edge` |
 | `PORT` | Host port (default `8090`) |
 | `DEFAULT_CURRENCY` | `EUR`, `CHF` or `USD` |
 | `DEFAULT_LANGUAGE` | `de` or `en` – users can switch the language in the app |
@@ -62,6 +62,8 @@ For access from the internet, put a reverse proxy with HTTPS in front (e.g. Cadd
 ## Usage notes
 
 - **Users:** admins manage accounts under *Settings → Users*. Every user only sees their own vehicles.
+- **Demo account:** `DEMO_USERNAME` / `DEMO_PASSWORD` create a restricted user on startup;
+  `DEMO_DISABLED` hides settings such as *Change password* for it (see [`.env.example`](.env.example)).
 - **Backup:** *Settings → Backup* exports/imports all data of a user as one JSON file.
   All server data is stored in the Docker volume `carmaint_data`.
 - **Update:** `docker compose pull && docker compose up -d`
