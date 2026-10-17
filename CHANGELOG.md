@@ -6,6 +6,12 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+### Added
+- Discord community link and badges in the README
+
+### Changed
+- New favicon based on the dark app icon (speedometer), plus an icon for the iOS home screen
+
 ## [0.1.3] – 2026-10-17
 
 ### Added

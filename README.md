@@ -2,6 +2,10 @@
 
 # CarMaint
 
+[![Release](https://img.shields.io/github/v/release/seals187/carMaint?color=ff6b1a)](https://github.com/seals187/carMaint/releases)
+[![Live demo](https://img.shields.io/badge/demo-online-111214?logo=googlechrome&logoColor=white)](https://cm-demo.seals187.com)
+[![Discord](https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/8DU3XPFJQ6)
+
 A lightweight, self-hosted maintenance log for your vehicles: services, repairs, inspections,
 costs, photos and receipts – with multi-user login. Runs as a single Docker container.
 
@@ -70,7 +74,10 @@ For access from the internet, put a reverse proxy with HTTPS in front (e.g. Cadd
 
 ## Community
 
-Questions, ideas, bug reports or want to contribute? Join us on [Discord](https://discord.gg/8DU3XPFJQ6).
+<a href="https://discord.gg/8DU3XPFJQ6"><img src="https://img.shields.io/badge/Join%20us%20on-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join us on Discord"></a>
+
+Have a question, an idea or found a bug? Want to contribute code, translations or feedback?
+The Discord server is the place to talk about CarMaint – everyone is welcome.
 
 ## Development
 
