@@ -6,6 +6,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.1.6] – 2026-10-17
+
 ### Added
 - Spanish user interface: switch the language under Settings or on the login page; `DEFAULT_LANGUAGE=es` sets it as default
 
@@ -61,7 +63,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/seals187/carMaint/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/seals187/carMaint/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/seals187/carMaint/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/seals187/carMaint/compare/v0.1.2...v0.1.3
