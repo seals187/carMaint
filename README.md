@@ -16,11 +16,6 @@ costs, photos and receipts – with multi-user login. Runs as a single Docker co
   <img src="docs/promo.png" alt="CarMaint – your car's whole history, self-hosted" width="720">
 </p>
 
-<p align="center">
-  <img src="docs/app_preview1.png" alt="CarMaint – vehicle overview" height="260">
-  <img src="docs/app_preview2.png" alt="CarMaint – vehicle page with photos, vehicle data and history" height="260">
-</p>
-
 **Live demo:** [cm-demo.seals187.com](https://cm-demo.seals187.com) – sign in with user `demo`, password `demodemo`.
 The demo container is deleted and recreated every 30 minutes, so all changes are reset.
 
