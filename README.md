@@ -52,10 +52,13 @@ All settings live in `.env` – see [`.env.example`](.env.example) for every opt
 | Variable | Description |
 |---|---|
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | First user (admin), created on first start. Password min. 8 characters |
-| `CARMAINT_VERSION` | `latest`, a fixed version such as `0.1.3`, or `edge` |
+| `CARMAINT_VERSION` | `latest`, a fixed version such as `0.1.7`, or `edge` |
 | `PORT` | Host port (default `8090`) |
 | `DEFAULT_CURRENCY` | `EUR`, `CHF` or `USD` |
-| `DEFAULT_LANGUAGE` | `de`, `en` or `es` – users can switch the language in the app |
+| `DEFAULT_LANGUAGE` | `de`, `en`, `es` or `fr` (default `en`) – used when the browser language is not supported; users can switch in the app |
+| `MAX_FILE_SIZE_MB` | Max. size per uploaded file in MB (default `20`, max. `30`) |
+| `USER_STORAGE_LIMIT_MB` | Max. storage per user for photos and receipts in MB (default `0` = unlimited) |
+| `ALLOWED_FILE_TYPES` | Allowed upload types: `pdf`, `jpg`, `png` (default `pdf,jpg`) |
 | `TRUSTED_PROXY_HEADERS` | e.g. `X-Forwarded-For` when running behind a reverse proxy |
 
 Apply changes with `docker compose up -d`. Forgot the admin password? Set `ADMIN_RESET_PASSWORD=true`

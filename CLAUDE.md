@@ -31,9 +31,9 @@ manage users. Files are `protected` and fetched with a short-lived file token.
 ## Conventions
 
 - **Language:** code, comments, log messages, docs and commit messages in **English**.
-  The UI is available in German, English and Spanish.
+  The UI is available in German, English, Spanish and French.
 - **UI texts:** never hard-code strings in `app.js`/`index.html`. Add the key to **all** languages
-  (`de`, `en`, `es`) in `pb_public/i18n.js` and use `t()` / `tn()` (plural `"one|many"`) or `data-i18n*` attributes.
+  (`de`, `en`, `es`, `fr`) in `pb_public/i18n.js` and use `t()` / `tn()` (plural `"one|many"`) or `data-i18n*` attributes.
 - **Stored values stay language-neutral** (entry types, settings keys; fuel values are stored in
   German for backwards compatibility and translated on display).
 - **New server settings** become `.env` variables: read them in `pb_hooks/config.js`, document them in

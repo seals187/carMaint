@@ -7,8 +7,21 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 ## [Unreleased]
 
 ### Added
+- Footer on the settings page: version with a link to its release notes, links to GitHub and to report a bug, copyright and license
+- French user interface (Français): switch the language under Settings or on the login page
+- New entry type “Documents / registration” (Dokumente / Ausweis), also available as a filter in the history; its photos and PDFs are shown as thumbnails on the car page (below the vehicle data) and via a new button on each car card
+- `MAX_FILE_SIZE_MB` in `.env`: max. size per uploaded photo or receipt (default 20 MB)
+- `USER_STORAGE_LIMIT_MB` in `.env`: max. storage per user for photos and receipts; the settings show the storage used (admins see it for every user in the user list)
+- `ALLOWED_FILE_TYPES` in `.env`: allowed upload types `pdf`, `jpg`, `png` (default `pdf,jpg`); other file types are rejected
 - CarMaint is now licensed under the AGPL-3.0 (license in the README and in the Docker image metadata)
 - New releases are announced automatically on the Discord server
+
+### Changed
+- The app icon is shown left of the CarMaint logo (header and login page)
+- The car model is shown slightly lighter than the make (car cards and car page)
+- Settings: selectors and buttons are always right-aligned next to their description; on phones the buttons use the full width
+- The UI starts in the browser language (German, English, Spanish or French); `DEFAULT_LANGUAGE` is now only used for other browser languages and defaults to `en`
+- Images keep their format when shrunk before uploading (PNG stays PNG instead of being converted to JPG)
 
 ## [0.1.6] – 2026-10-17
 

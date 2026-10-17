@@ -22,6 +22,25 @@ onBootstrap((be) => {
     settings.trustedProxy.headers = cfg.trustedProxyHeaders;
     e.app.save(settings);
 
+    // Upload rules for photos and receipts: max. size per file (MAX_FILE_SIZE_MB)
+    // and allowed file types (ALLOWED_FILE_TYPES)
+    const { FILE_FIELDS } = require(`${__hooks}/storage.js`);
+    for (const [collection, fieldName] of Object.entries(FILE_FIELDS)) {
+      try {
+        const col = e.app.findCollectionByNameOrId(collection);
+        const field = col.fields.getByName(fieldName);
+        const maxSize = cfg.maxFileSizeMB * 1024 * 1024;
+        const mimeTypes = cfg.fileTypes[fieldName];
+        if (field.maxSize !== maxSize || Array.from(field.mimeTypes).join() !== mimeTypes.join()) {
+          field.maxSize = maxSize;
+          field.mimeTypes = mimeTypes;
+          e.app.save(col);
+        }
+      } catch (err) {
+        log.error('CarMaint: could not set the upload rules', 'collection', collection, 'error', String(err));
+      }
+    }
+
     // First user = admin (only if no user exists yet)
     if (cfg.adminUsername && cfg.adminPassword) {
       try {
@@ -95,6 +114,10 @@ routerAdd('GET', '/api/carmaint/config', (e) => {
     defaultCurrency: cfg.defaultCurrency,
     defaultLanguage: cfg.defaultLanguage,
     version: cfg.version,
+    year: new Date().getFullYear(), // server clock, for the copyright line
+    maxFileSizeMB: cfg.maxFileSizeMB,
+    storageLimitMB: cfg.storageLimitMB,
+    fileTypes: cfg.fileTypes,
     demo: cfg.demoUsername ? { username: cfg.demoUsername, disabled: cfg.demoDisabled } : null,
   });
 });
@@ -113,3 +136,40 @@ onRecordUpdateRequest((e) => {
   }
   return e.next();
 }, 'users');
+
+// Storage limit per user (USER_STORAGE_LIMIT_MB): checked whenever photos or
+// receipts are uploaded, including backup imports.
+const checkStorageLimit = (e) => {
+  const cfg = require(`${__hooks}/config.js`);
+  if (cfg.storageLimitMB > 0 && e.auth) {
+    const { FILE_FIELDS, usage } = require(`${__hooks}/storage.js`);
+    const field = FILE_FIELDS[e.collection.name];
+    const incoming = e.record.getUnsavedFiles(field).reduce((sum, file) => sum + file.size, 0);
+    if (incoming > 0 && usage(e.app, e.auth.id) + incoming > cfg.storageLimitMB * 1024 * 1024) {
+      throw new BadRequestError('Storage limit reached.', {
+        [field]: new ValidationError('storage_limit', 'Storage limit reached.'),
+      });
+    }
+  }
+  return e.next();
+};
+onRecordCreateRequest(checkStorageLimit, 'cars', 'entries');
+onRecordUpdateRequest(checkStorageLimit, 'cars', 'entries');
+
+// Storage used by the signed-in user (settings page)
+routerAdd('GET', '/api/carmaint/usage', (e) => {
+  const cfg = require(`${__hooks}/config.js`);
+  const { usage } = require(`${__hooks}/storage.js`);
+  return e.json(200, { used: usage(e.app, e.auth.id), limit: cfg.storageLimitMB * 1024 * 1024 });
+}, $apis.requireAuth());
+
+// Storage used by every user (admins only, user list in the settings).
+// Only totals are returned, no information about the files themselves.
+routerAdd('GET', '/api/carmaint/usage/users', (e) => {
+  if (e.auth.getString('role') !== 'admin') throw new ForbiddenError('Admins only.');
+  const cfg = require(`${__hooks}/config.js`);
+  const { usage } = require(`${__hooks}/storage.js`);
+  const users = {};
+  for (const user of e.app.findAllRecords('users')) users[user.id] = usage(e.app, user.id);
+  return e.json(200, { users, limit: cfg.storageLimitMB * 1024 * 1024 });
+}, $apis.requireAuth());

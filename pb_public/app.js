@@ -6,6 +6,8 @@ const THEME_KEY = 'carmaint:theme';
 const AUTH_KEY = 'carmaint:auth';
 const CAR_PHOTO_MAX = 1600;               // px, longest side
 const ATTACHMENT_MAX = 2000;              // receipts slightly larger so text stays readable
+const GITHUB_URL = 'https://github.com/seals187/carmaint';
+const COPYRIGHT_SINCE = 2026;
 const UPLOAD_CHUNK = 24 * 1024 * 1024;    // stay below the server limit (32 MB) per request
 
 const CURRENCIES = {
@@ -22,6 +24,7 @@ const TYPES = {
   repair:     { color: 'orange' },
   inspection: { color: 'green' },
   tires:      { color: 'purple' },
+  documents:  { color: 'teal' },
   other:      { color: 'gray' },
 };
 const typeLabel = (type) => t(`type.${TYPES[type] ? type : 'other'}`);
@@ -41,12 +44,14 @@ const ICONS = {
   image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
   paperclip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
   file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+  idCard: '<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.17 15a3 3 0 0 1 5.66 0"/><path d="M16 10h2"/><path d="M16 14h2"/>',
   star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   chevronLeft: '<path d="m15 18-6-6 6-6"/>',
   chevronRight: '<path d="m9 18 6-6-6-6"/>',
   chevronDown: '<path d="m6 9 6 6 6-6"/>',
   settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  github: '<path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
   key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>',
   userPlus: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/>',
@@ -61,10 +66,21 @@ const isImageName = (name) => /\.(jpe?g|png|webp|gif|bmp|avif)$/i.test(name);
 // The server appends "_<10 chars>" to file names – strip it again for display.
 const displayName = (name) => name.replace(/_[a-z0-9]{10}(\.[^.]+)$/i, '$1');
 
-// Logo: "CarMaint" -> CAR (neutral) + MAINT (accent); other names split at the second capital letter.
+// App icon (same as favicon.svg), shown left of the wordmark.
+const LOGO_MARK = `<svg class="logo-mark" viewBox="0 0 512 512" aria-hidden="true">
+  <rect width="512" height="512" rx="112" fill="#ff6b1a"/>
+  <g fill="none" stroke-width="72" stroke-linecap="round">
+    <path d="M418.3 218.5A168 168 0 0 1 388.4 365.4" stroke="#c24a0a"/>
+    <path d="M123.6 365.4A168 168 0 1 1 418.3 218.5" stroke="#111214"/>
+    <path d="M256 288L356 186" stroke="#fff" stroke-width="40"/>
+    <circle cx="256" cy="288" r="30" stroke="#111214" stroke-width="36" fill="#ff6b1a"/>
+  </g>
+</svg>`;
+
+// Logo: icon + "CarMaint" -> CAR (neutral) + MAINT (accent); other names split at the second capital letter.
 function wordmark(name) {
   const [, a = name, b = ''] = /^carmaint$/i.test(name) ? [, name.slice(0, 3), name.slice(3)] : (name.match(/^(.[^A-Z\s]*)(.*)$/) ?? []);
-  return `<span class="logo-a">${esc(a)}</span><span class="logo-b">${esc(b)}</span>`;
+  return `${LOGO_MARK}<span class="logo-a">${esc(a)}</span><span class="logo-b">${esc(b)}</span>`;
 }
 
 let settings = { ...DEFAULT_SETTINGS };
@@ -79,7 +95,7 @@ const defaultInfoCollapsed = () =>
   settings.infoBox === 'closed' || (settings.infoBox === 'remember' && settings.infoCollapsed);
 
 // Dates and numbers follow the UI language.
-const LOCALES = { de: 'de-DE', en: 'en-GB', es: 'es-ES' };
+const LOCALES = { de: 'de-DE', en: 'en-GB', es: 'es-ES', fr: 'fr-FR' };
 const locale = () => LOCALES[lang] ?? 'de-DE';
 const numberFormats = {};
 const fmtNum = (v) => (numberFormats[lang] ??= new Intl.NumberFormat(locale())).format(v);
@@ -133,7 +149,8 @@ class ApiError extends Error {
     else if (status === 429) message = t('err.tooMany');
     else if (field) {
       const label = hasTranslation(`field.${field}`) ? t(`field.${field}`) : field;
-      const reason = hasTranslation(`code.${err.code}`) ? t(`code.${err.code}`) : `– ${err.message}`;
+      const limits = { max: serverConfig.maxFileSizeMB, limit: serverConfig.storageLimitMB, types: typeList(serverConfig.fileTypes[field]) };
+      const reason = hasTranslation(`code.${err.code}`) ? t(`code.${err.code}`, limits) : `– ${err.message}`;
       message = `${label} ${reason}`;
     } else message = data?.message || t('err.status', { status });
     super(message);
@@ -284,6 +301,8 @@ async function uploadAttachments(entry, files) {
 }
 
 const MIME_EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif', 'image/bmp': '.bmp', 'image/avif': '.avif', 'application/pdf': '.pdf' };
+// "PDF, JPG" for a list of MIME types
+const typeList = (types = []) => types.map((type) => MIME_EXT[type]?.slice(1).toUpperCase() ?? type).join(', ');
 function withExt(name, type) {
   const ext = MIME_EXT[type];
   if (!ext) return name;
@@ -291,8 +310,10 @@ function withExt(name, type) {
   return base + ext;
 }
 
+// Images are shrunk in their own format (JPG stays JPG, PNG stays PNG),
+// but only if that makes the file smaller.
 async function compressImage(file, maxSize) {
-  if (!/^image\/(jpeg|png|webp|bmp)$/.test(file.type)) return file;
+  if (!/^image\/(jpeg|png)$/.test(file.type)) return file;
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => null);
   if (!bitmap) return file;
   const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
@@ -301,11 +322,17 @@ async function compressImage(file, maxSize) {
   canvas.height = Math.round(bitmap.height * scale);
   canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82));
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, file.type, 0.82));
   return blob && blob.size < file.size ? blob : file;
 }
 
-async function prepareFile(file, maxSize) {
+// File types the server does not allow (ALLOWED_FILE_TYPES) are rejected, not converted.
+function checkFileType(file, types) {
+  if (!types.includes(file.type)) throw new Error(t('err.fileType', { name: file.name, types: typeList(types) }));
+}
+
+async function prepareFile(file, maxSize, types) {
+  checkFileType(file, types);
   const blob = file.type.startsWith('image/') ? await compressImage(file, maxSize) : file;
   return { blob, name: withExt(file.name, blob.type || file.type) };
 }
@@ -336,7 +363,8 @@ function openFile(url, name) {
 
 /* ---------- Data ---------- */
 
-let serverConfig = { appName: 'CarMaint', defaultCurrency: 'EUR', defaultLanguage: 'de', version: 'dev' };
+let serverConfig = { appName: 'CarMaint', defaultCurrency: 'EUR', defaultLanguage: 'en', version: 'dev', maxFileSizeMB: 20, storageLimitMB: 0,
+  fileTypes: { attachments: ['application/pdf', 'image/jpeg'], photos: ['image/jpeg'] } };
 let db = { cars: [], entries: [] };
 
 async function loadData() {
@@ -351,6 +379,11 @@ const entriesFor = (carId) => db.entries
   .filter((e) => e.car === carId)
   .sort((a, b) => b.date.localeCompare(a.date) || (b.mileage || 0) - (a.mileage || 0));
 
+// Documents = files attached to entries of type "documents" (newest first).
+const documentsFor = (carId) => entriesFor(carId)
+  .filter((e) => e.type === 'documents')
+  .flatMap((entry) => entry.attachments.map((name) => ({ entry, name })));
+
 function upsertLocal(list, record) {
   const items = db[list];
   const i = items.findIndex((r) => r.id === record.id);
@@ -361,14 +394,17 @@ function upsertLocal(list, record) {
 
 /* ---------- Language ---------- */
 
-// Before login: the language last used on this device, otherwise the server default.
+// Before login: the language last used on this device, otherwise the first supported
+// browser language, otherwise the server default (DEFAULT_LANGUAGE).
 function initialLanguage() {
   let stored = null;
   try { stored = localStorage.getItem(LANG_KEY); } catch {}
   if (LANGUAGES[stored]) return stored;
-  if (LANGUAGES[serverConfig.defaultLanguage]) return serverConfig.defaultLanguage;
-  const browser = navigator.language?.slice(0, 2).toLowerCase();
-  return LANGUAGES[browser] ? browser : 'en';
+  const browser = (navigator.languages?.length ? navigator.languages : [navigator.language])
+    .map((l) => l?.slice(0, 2).toLowerCase())
+    .find((l) => LANGUAGES[l]);
+  if (browser) return browser;
+  return LANGUAGES[serverConfig.defaultLanguage] ? serverConfig.defaultLanguage : 'en';
 }
 
 function setLanguage(next) {
@@ -571,17 +607,24 @@ function renderSettings() {
       <div class="section-head"><h2>${t('settings.display')}</h2></div>
       <div class="card settings">${display}</div>` : ''}
 
-    ${backup ? `
-      <div class="section-head"><h2>${t('settings.data')}</h2></div>
-      <div class="card settings">
+    <div class="section-head"><h2>${t('settings.data')}</h2></div>
+    <div class="card settings">
+      <div class="setting">
+        <div class="grow">
+          <h3>${t('settings.storage')}</h3>
+          <p class="muted small" id="storageText">${t('settings.storageHint', { max: serverConfig.maxFileSizeMB, types: typeList(serverConfig.fileTypes.attachments) })}</p>
+          ${serverConfig.storageLimitMB ? '<div class="meter" id="storageMeter" hidden><span></span></div>' : ''}
+        </div>
+      </div>
+      ${backup ? `
         <div class="setting">
           <div>
             <h3>${t('settings.backup')}</h3>
             <p class="muted small">${t('settings.backupHint')}</p>
           </div>
           <div class="setting-actions">${backup}</div>
-        </div>
-      </div>` : ''}
+        </div>` : ''}
+    </div>
 
     <div class="section-head"><h2>${t('settings.account')}</h2></div>
     <div class="card settings">
@@ -603,25 +646,81 @@ function renderSettings() {
         <button class="btn ghost sm-btn" data-action="add-user">${icon('userPlus')}${t('btn.add')}</button>
       </div>
       <div class="card settings" id="usersCard"><p class="muted small center">${t('settings.loadingUsers')}</p></div>` : ''}
-    <p class="muted small version">${esc(serverConfig.appName)} · ${t('settings.version', { version: esc(serverConfig.version) })}</p>`;
+    ${settingsFooter()}`;
 
+  renderStorage();
   if (isAdmin()) renderUsers();
+}
+
+// Static links only – nothing is fetched from GitHub.
+function settingsFooter() {
+  const { version } = serverConfig;
+  const release = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version);
+  const releaseUrl = release ? `${GITHUB_URL}/releases/tag/v${version}` : `${GITHUB_URL}/releases`;
+  const ext = 'target="_blank" rel="noopener noreferrer"';
+  // Year from the server clock (not the visitor's device): "2026" or "2026–2028"
+  const year = Math.max(COPYRIGHT_SINCE, Number(serverConfig.year) || COPYRIGHT_SINCE);
+  const years = year > COPYRIGHT_SINCE ? `${COPYRIGHT_SINCE}–${year}` : COPYRIGHT_SINCE;
+  return `
+    <footer class="app-footer">
+      <a class="icon-btn" href="${GITHUB_URL}" ${ext} aria-label="GitHub" title="GitHub">${icon('github')}</a>
+      <p class="muted small">
+        ${esc(serverConfig.appName)} ·
+        <a href="${esc(releaseUrl)}" ${ext} title="${t('footer.releaseNotes')}">${esc(release ? `v${version}` : version)}</a> ·
+        <a href="${GITHUB_URL}/issues/new" ${ext}>${t('footer.reportBug')}</a>
+      </p>
+      <p class="muted small">
+        © ${years} <a href="https://github.com/seals187" ${ext}>Julien Kühne</a> ·
+        <a href="${GITHUB_URL}/blob/main/LICENSE" ${ext}>AGPL-3.0</a>
+      </p>
+    </footer>`;
+}
+
+const fmtMB = (bytes) => `${fmtNum(Math.round(bytes / 1024 / 1024 * 10) / 10)} ${t('unit.mb')}`;
+
+const storageStatus = (used, limit) => (limit
+  ? t('settings.storageUsedOf', { used: fmtMB(used), limit: fmtMB(limit) })
+  : t('settings.storageUsed', { used: fmtMB(used) }));
+
+async function renderStorage() {
+  try {
+    const { used, limit } = await api('GET', '/api/carmaint/usage');
+    const text = $('#storageText');
+    if (!text?.isConnected) return;
+    text.textContent = `${storageStatus(used, limit)} · ${t('settings.storageHint', { max: serverConfig.maxFileSizeMB, types: typeList(serverConfig.fileTypes.attachments) })}`;
+    const meter = $('#storageMeter');
+    if (meter && limit) {
+      const percent = Math.min(100, used / limit * 100);
+      meter.hidden = false;
+      meter.dataset.level = percent >= 90 ? 'high' : '';
+      meter.firstElementChild.style.width = `${percent}%`;
+    }
+  } catch (err) {
+    console.warn('Storage usage could not be loaded', err);
+  }
 }
 
 async function renderUsers() {
   const card = $('#usersCard');
   try {
-    const users = await listAll('users', '&sort=username');
+    // Storage per user is optional – the list still shows if it cannot be loaded.
+    const [users, storage] = await Promise.all([
+      listAll('users', '&sort=username'),
+      api('GET', '/api/carmaint/usage/users').catch(() => null),
+    ]);
     if (!card.isConnected) return;
     card.innerHTML = users.map((u) => {
       const self = u.id === me().id;
       const name = esc(u.username);
+      const used = storage?.users[u.id];
+      const full = storage?.limit && used >= storage.limit * 0.9;
       return `
         <div class="user-row">
           <div class="user-avatar">${esc(u.username.slice(0, 1).toUpperCase())}</div>
           <div class="grow">
             <strong>${name}</strong>${self ? ` <span class="muted small">${t('users.you')}</span>` : ''}
-            <p class="muted small">${u.role === 'admin' ? t('role.adminLong') : t('role.user')}</p>
+            <p class="muted small">${u.role === 'admin' ? t('role.adminLong') : t('role.user')}${used === undefined ? ''
+              : ` · <span${full ? ' class="storage-full"' : ''}>${esc(storageStatus(used, storage.limit))}</span>`}</p>
           </div>
           ${self ? '' : `
             <button class="icon-btn sm" data-action="change-password" data-id="${esc(u.id)}" data-name="${name}" title="${t('users.resetPw')}" aria-label="${t('users.resetPwFor', { name })}">${icon('key')}</button>
@@ -662,6 +761,9 @@ document.addEventListener('change', (ev) => {
   }
 });
 
+// Make as before, model slightly lighter so the two are easy to tell apart.
+const carTitle = (car) => `${esc(car.make)} <span class="car-model">${esc(car.model)}</span>`;
+
 function carCard(car) {
   const entries = entriesFor(car.id);
   const last = entries[0];
@@ -674,10 +776,13 @@ function carCard(car) {
       <div class="car-card-body">
         <div class="car-card-title">
           <div>
-            <h3><a class="card-link" href="#/car/${esc(car.id)}">${carName}</a></h3>
+            <h3><a class="card-link" href="#/car/${esc(car.id)}">${carTitle(car)}</a></h3>
             <p class="muted small">${sub || '&nbsp;'}</p>
           </div>
-          <button class="icon-btn quick-add" data-action="add-entry" data-id="${esc(car.id)}" title="${t('card.addEntry')}" aria-label="${t('card.addEntryFor', { car: carName })}">${icon('wrench')}</button>
+          <div class="card-actions">
+            <button class="icon-btn quick-add" data-action="show-docs" data-id="${esc(car.id)}" title="${t('docs.show')}" aria-label="${t('docs.showFor', { car: carName })}">${icon('idCard')}</button>
+            <button class="icon-btn quick-add" data-action="add-entry" data-id="${esc(car.id)}" title="${t('card.addEntry')}" aria-label="${t('card.addEntryFor', { car: carName })}">${icon('wrench')}</button>
+          </div>
         </div>
         <dl class="stats">
           <div><dt>${t('stats.km')}</dt><dd>${km(car.mileage)}</dd></div>
@@ -704,7 +809,7 @@ function renderCar(car) {
       <div class="hero-title">
         <div class="avatar lg">${photos[0] ? `<img data-file="${esc(carFile(car, photos[0]))}" data-thumb="300x225" alt="">` : icon('car')}</div>
         <div>
-          <h1>${esc(car.make)} ${esc(car.model)}</h1>
+          <h1>${carTitle(car)}</h1>
           ${sub ? `<p class="muted">${sub}</p>` : ''}
         </div>
       </div>
@@ -735,11 +840,20 @@ function renderCar(car) {
               </div>
             </div>`).join('')}
           <label class="thumb add">${icon('image')}<span>${t('photos.add')}</span>
-            <input type="file" multiple accept="image/*" data-upload="car-photos" data-id="${id}" hidden>
+            <input type="file" multiple accept="${serverConfig.fileTypes.photos.join(',')}" data-upload="car-photos" data-id="${id}" hidden>
           </label>
         </div>
       </section>
-      ${infoBox(car)}
+      <div class="car-side">
+        ${infoBox(car)}
+        <section>
+          <div class="section-head">
+            <h2>${t('type.documents')}</h2>
+            <button class="icon-btn sm push-right" data-action="add-document" data-id="${id}" title="${t('docs.add')}" aria-label="${t('docs.add')}">${icon('plus')}</button>
+          </div>
+          <div class="card docs-card">${docGrid(car)}</div>
+        </section>
+      </div>
     </div>
 
     <div class="section-head"><h2>${t('history.title')}</h2>${entries.length ? `<span class="muted small">${entries.length}</span>` : ''}</div>
@@ -758,6 +872,28 @@ function renderCar(car) {
     renderEntries(car);
   });
   renderEntries(car);
+}
+
+// Documents of a car as thumbnails (images) or file tiles (PDF).
+function docGrid(car) {
+  const docs = documentsFor(car.id);
+  if (!docs.length) {
+    return `
+      <div class="docs-empty">
+        <p class="muted small">${t('docs.emptyText')}</p>
+        <button class="btn ghost file-btn" data-action="add-document" data-id="${esc(car.id)}">${icon('plus')}${t('docs.add')}</button>
+      </div>`;
+  }
+  return `<div class="doc-grid">${docs.map(({ entry, name }) => {
+    // Images are labelled with the entry title, PDFs (no preview) with their file name
+    const file = esc(attachmentLabel(entry, name));
+    const label = isImageName(name) ? esc(entry.title) || file : file;
+    return isImageName(name)
+      ? `<button class="doc" data-action="view-doc" data-id="${esc(car.id)}" data-file="${esc(entryFile(entry, name))}" title="${file}" aria-label="${t('att.view', { name: label })}">
+           <img data-file="${esc(entryFile(entry, name))}" data-thumb="300x225" alt=""><span>${label}</span></button>`
+      : `<button class="doc file" data-action="open-file" data-id="${esc(entry.id)}" data-file="${esc(name)}" title="${file}" aria-label="${t('att.view', { name: label })}">
+           <span class="doc-icon">${icon('file')}</span><span>${label}</span></button>`;
+  }).join('')}</div>`;
 }
 
 function infoBox(car) {
@@ -860,6 +996,7 @@ const infoForm = $('#infoForm');
 const userDialog = $('#userDialog');
 const userForm = $('#userForm');
 const passwordDialog = $('#passwordDialog');
+const docsDialog = $('#docsDialog');
 const passwordForm = $('#passwordForm');
 const lightbox = $('#lightbox');
 
@@ -909,7 +1046,7 @@ carForm.addEventListener('submit', (ev) => {
   ev.preventDefault();
   withBusy(carForm, async () => {
     const f = Object.fromEntries(new FormData(carForm));
-    const photos = await Promise.all([...$('#carPhotos').files].map((file) => prepareFile(file, CAR_PHOTO_MAX)));
+    const photos = await Promise.all([...$('#carPhotos').files].map((file) => prepareFile(file, CAR_PHOTO_MAX, serverConfig.fileTypes.photos)));
     const data = {
       make: f.make.trim(),
       model: f.model.trim(),
@@ -972,7 +1109,15 @@ function openEntryDialog(entry) {
 }
 
 $('#attInput').addEventListener('change', (ev) => {
-  for (const file of ev.target.files) draft.add.push({ file, url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null });
+  for (const file of ev.target.files) {
+    try {
+      checkFileType(file, serverConfig.fileTypes.attachments);
+    } catch (err) {
+      toast(err.message);
+      continue;
+    }
+    draft.add.push({ file, url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null });
+  }
   ev.target.value = '';
   renderDraft();
 });
@@ -992,7 +1137,7 @@ entryForm.addEventListener('submit', (ev) => {
   withBusy(entryForm, async () => {
     const f = Object.fromEntries(new FormData(entryForm));
     const existing = entryById(f.id);
-    const files = await Promise.all(draft.add.map((d) => prepareFile(d.file, ATTACHMENT_MAX)));
+    const files = await Promise.all(draft.add.map((d) => prepareFile(d.file, ATTACHMENT_MAX, serverConfig.fileTypes.attachments)));
     const removed = (existing?.attachments ?? []).filter((name) => !draft.keep.includes(name));
     const data = {
       type: f.type,
@@ -1110,7 +1255,7 @@ userForm.addEventListener('submit', (ev) => {
   });
 });
 
-for (const dialog of [carDialog, entryDialog, infoDialog, userDialog, passwordDialog, lightbox]) {
+for (const dialog of [carDialog, entryDialog, infoDialog, userDialog, passwordDialog, docsDialog, lightbox]) {
   dialog.addEventListener('click', (ev) => {
     if (ev.target === dialog || ev.target.closest('[data-close]')) dialog.close();
   });
@@ -1239,6 +1384,23 @@ document.addEventListener('click', (ev) => {
     case 'add-entry':
       openEntryDialog({ car: id });
       break;
+    case 'show-docs': {
+      const car = carById(id);
+      $('#docsDialogTitle').textContent = `${t('type.documents')} · ${car.make} ${car.model}`;
+      $('#docsContent').innerHTML = docGrid(car);
+      showDialog(docsDialog);
+      hydrate();
+      break;
+    }
+    case 'add-document':
+      if (docsDialog.open) docsDialog.close();
+      openEntryDialog({ car: id, type: 'documents' });
+      break;
+    case 'view-doc': {
+      const images = documentsFor(id).filter((d) => isImageName(d.name)).map((d) => entryFile(d.entry, d.name));
+      openLightbox(images, images.indexOf(el.dataset.file));
+      break;
+    }
     case 'edit-entry':
       openEntryDialog(entryById(id));
       break;
@@ -1297,9 +1459,10 @@ document.addEventListener('change', async (ev) => {
   const input = ev.target.closest('input[data-upload="car-photos"]');
   if (!input?.files.length) return;
   const files = [...input.files];
-  toast(tn('toast.photosUploading', files.length), 0);
   await runAction(async () => {
-    const prepared = await Promise.all(files.map((file) => prepareFile(file, CAR_PHOTO_MAX)));
+    files.forEach((file) => checkFileType(file, serverConfig.fileTypes.photos));
+    toast(tn('toast.photosUploading', files.length), 0);
+    const prepared = await Promise.all(files.map((file) => prepareFile(file, CAR_PHOTO_MAX, serverConfig.fileTypes.photos)));
     upsertLocal('cars', await uploadFiles('cars', input.dataset.id, 'photos', prepared));
     route();
     toast(tn('toast.photosAdded', files.length));
@@ -1349,12 +1512,15 @@ async function exportBackup() {
 async function importBackup(data) {
   if (!Array.isArray(data?.cars) || !Array.isArray(data?.entries)) throw new Error(t('err.invalidBackup'));
   const files = new Map((Array.isArray(data.files) ? data.files : []).map((f) => [f.id, f]));
-  const fileOf = (id, fallbackName) => {
+  // Files of a type this server does not allow (ALLOWED_FILE_TYPES) are skipped.
+  const fileOf = async (id, fallbackName, types) => {
     const f = files.get(id);
     if (!f?.data) return null;
     const blob = dataUrlToBlob(f.data);
+    if (!types.includes(blob.type)) return null;
     return { blob, name: withExt(f.name || fallbackName || 'file', blob.type) };
   };
+  const filesOf = async (list, toFile) => (await Promise.all((Array.isArray(list) ? list : []).map(toFile))).filter(Boolean);
 
   const oldCars = db.cars.map((c) => c.id);
   const created = [];
@@ -1376,7 +1542,7 @@ async function importBackup(data) {
         info: c.info && typeof c.info === 'object' ? c.info : {},
       });
       created.push(car.id);
-      const photos = (Array.isArray(c.photos) ? c.photos : []).map((id) => fileOf(id, 'photo')).filter(Boolean);
+      const photos = await filesOf(c.photos, (id) => fileOf(id, 'photo', serverConfig.fileTypes.photos));
       if (photos.length) car = await uploadFiles('cars', car.id, 'photos', photos);
       carIds.set(c.id, car.id);
     }
@@ -1394,7 +1560,7 @@ async function importBackup(data) {
         shop: str(e.shop),
         notes: str(e.notes),
       });
-      const atts = (Array.isArray(e.attachments) ? e.attachments : []).map((a) => fileOf(a.id, a.name)).filter(Boolean);
+      const atts = await filesOf(e.attachments, (a) => fileOf(a?.id, a?.name, serverConfig.fileTypes.attachments));
       if (atts.length) await uploadAttachments(entry, atts);
     }
   } catch (err) {
@@ -1459,6 +1625,9 @@ async function start() {
     serverConfig = { ...serverConfig, ...(await api('GET', '/api/carmaint/config')) };
   } catch {}
   setLanguage(initialLanguage());
+  // File pickers only offer the allowed types (ALLOWED_FILE_TYPES)
+  $('#attInput').accept = serverConfig.fileTypes.attachments.join(',');
+  $('#carPhotos').accept = serverConfig.fileTypes.photos.join(',');
   document.title = serverConfig.appName;
   $('#appName').innerHTML = wordmark(serverConfig.appName);
   $('#appName').setAttribute('aria-label', serverConfig.appName);

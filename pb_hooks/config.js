@@ -10,8 +10,24 @@ const env = (key, fallback = '') => {
 
 const CURRENCIES = ['EUR', 'CHF', 'USD'];
 const currency = env('DEFAULT_CURRENCY', 'EUR').toUpperCase();
-const LANGUAGES = ['de', 'en', 'es'];
-const language = env('DEFAULT_LANGUAGE', 'de').toLowerCase();
+const LANGUAGES = ['de', 'en', 'es', 'fr'];
+const language = env('DEFAULT_LANGUAGE', 'en').toLowerCase();
+const int = (key, fallback) => {
+  const n = parseInt(env(key, String(fallback)), 10);
+  return Number.isFinite(n) ? n : fallback;
+};
+// File types that can be allowed for uploads (ALLOWED_FILE_TYPES)
+const FILE_TYPES = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+};
+const fileTypes = [...new Set(env('ALLOWED_FILE_TYPES', 'pdf,jpg').toLowerCase().split(',')
+  .map((ext) => FILE_TYPES[ext.trim().replace(/^\./, '')]).filter(Boolean))];
+const allowedFileTypes = fileTypes.length ? fileTypes : [FILE_TYPES.pdf, FILE_TYPES.jpg];
+const imageTypes = allowedFileTypes.filter((type) => type.startsWith('image/'));
+
 // Settings that can be disabled for the demo user
 const DEMO_OPTIONS = ['language', 'currency', 'infobox', 'export', 'import', 'password'];
 
@@ -20,7 +36,17 @@ module.exports = {
   version: env('APP_VERSION', 'dev'), // set in the Docker image
   appUrl: env('APP_URL').replace(/\/+$/, ''),
   defaultCurrency: CURRENCIES.includes(currency) ? currency : 'EUR',
-  defaultLanguage: LANGUAGES.includes(language) ? language : 'de',
+  defaultLanguage: LANGUAGES.includes(language) ? language : 'en',
+
+  // Uploads: max. size per file (1–30 MB, requests are limited to 32 MB) and
+  // storage per user for photos and receipts (0 = unlimited)
+  maxFileSizeMB: Math.min(30, Math.max(1, int('MAX_FILE_SIZE_MB', 20))),
+  storageLimitMB: Math.max(0, int('USER_STORAGE_LIMIT_MB', 0)),
+  // MIME types for receipts; car photos only take the image types (JPG if none is allowed)
+  fileTypes: {
+    attachments: allowedFileTypes,
+    photos: imageTypes.length ? imageTypes : [FILE_TYPES.jpg],
+  },
 
   adminUsername: env('ADMIN_USERNAME'),
   adminPassword: env('ADMIN_PASSWORD'),
