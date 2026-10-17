@@ -68,6 +68,10 @@ For access from the internet, put a reverse proxy with HTTPS in front (e.g. Cadd
   All server data is stored in the Docker volume `carmaint_data`.
 - **Update:** `docker compose pull && docker compose up -d`
 
+## Community
+
+Questions, ideas, bug reports or want to contribute? Join us on [Discord](https://discord.gg/8DU3XPFJQ6).
+
 ## Development
 
 ```powershell
