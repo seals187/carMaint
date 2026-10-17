@@ -6,6 +6,9 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+### Added
+- New releases are announced automatically on the Discord server
+
 ## [0.1.6] – 2026-10-17
 
 ### Added

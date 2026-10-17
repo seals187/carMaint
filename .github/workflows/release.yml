@@ -1,5 +1,6 @@
 # Creates a GitHub release for every version tag, with the release notes
-# taken from the matching section in CHANGELOG.md.
+# taken from the matching section in CHANGELOG.md, and announces new releases
+# on Discord (repository secret DISCORD_WEBHOOK; skipped if not set).
 #
 #   git tag v0.2.0 && git push origin v0.2.0   ->  release "CarMaint 0.2.0"
 #
@@ -69,4 +70,30 @@ jobs:
             gh release edit "$TAG" --title "CarMaint $VERSION" --notes-file notes.md
           else
             gh release create "$TAG" --verify-tag --title "CarMaint $VERSION" --notes-file notes.md "${flags[@]}"
+            echo "CREATED=true" >> "$GITHUB_ENV"
           fi
+
+      # Done here instead of a separate "on: release" workflow: releases created
+      # with github.token do not trigger other workflows.
+      - name: Announce on Discord
+        if: env.CREATED == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::notice::DISCORD_WEBHOOK secret not set – skipping the Discord post"; exit 0
+          fi
+          url=$(gh release view "$TAG" --json url --jq .url)
+          jq -n \
+            --arg tag "$TAG" --arg url "$url" \
+            --arg body "$(head -c 3900 notes.md)" \
+            '{
+              username: "CarMaint",
+              embeds: [{
+                title: ("🚀 CarMaint " + $tag + " released"),
+                url: $url,
+                description: ($body + "\n\n**Update:** `docker compose pull && docker compose up -d`"),
+                color: 16739098
+              }]
+            }' | curl -sS -f -H "Content-Type: application/json" -d @- "$WEBHOOK"
