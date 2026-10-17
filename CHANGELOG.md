@@ -9,6 +9,7 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 ### Added
 - App screenshots in the README
 - Link to the live demo in the README
+- Demo user: `DEMO_USERNAME` and `DEMO_DISABLED` in `.env` hide settings such as “Change password” for that account (also enforced on the server)
 
 ## [0.1.1] – 2026-10-17
 

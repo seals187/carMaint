@@ -75,5 +75,21 @@ routerAdd('GET', '/api/carmaint/config', (e) => {
     defaultCurrency: cfg.defaultCurrency,
     defaultLanguage: cfg.defaultLanguage,
     version: cfg.version,
+    demo: cfg.demoUsername ? { username: cfg.demoUsername, disabled: cfg.demoDisabled } : null,
   });
 });
+
+// Demo user: block disabled settings on the server, not only in the UI.
+// The username is locked too, otherwise renaming would lift the restrictions.
+onRecordUpdateRequest((e) => {
+  const cfg = require(`${__hooks}/config.js`);
+  const auth = e.auth;
+  if (cfg.demoUsername && auth && auth.id === e.record.id && auth.getString('username') === cfg.demoUsername) {
+    const body = e.requestInfo().body;
+    const blocked = ['username', ...(cfg.demoDisabled.includes('password') ? ['password', 'oldPassword', 'passwordConfirm'] : [])];
+    if (blocked.some((key) => body[key] !== undefined)) {
+      throw new ForbiddenError('Not allowed for the demo user.');
+    }
+  }
+  return e.next();
+}, 'users');

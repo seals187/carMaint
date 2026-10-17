@@ -524,20 +524,21 @@ function renderHome() {
       : emptyState('car', t('home.emptyTitle'), t('home.emptyText'), addBtn(t('home.addFirstCar')))}`;
 }
 
-function renderSettings() {
-  $('#app').innerHTML = `
-    <a href="#/" class="back">${icon('back')}${t('nav.back')}</a>
-    <section class="hero"><h1>${t('settings.title')}</h1></section>
+// The demo user (DEMO_USERNAME) can have single settings disabled (DEMO_DISABLED).
+const isDemo = () => !!serverConfig.demo && me()?.username === serverConfig.demo.username;
+const allowed = (option) => !isDemo() || !serverConfig.demo.disabled.includes(option);
 
-    <div class="section-head"><h2>${t('settings.display')}</h2></div>
-    <div class="card settings">
+function renderSettings() {
+  const display = [
+    allowed('language') && `
       <div class="setting">
         <div>
           <h3>${t('settings.language')}</h3>
           <p class="muted small">${t('settings.languageHint')}</p>
         </div>
         ${segmented('language', t('settings.language'), LANGUAGES)}
-      </div>
+      </div>`,
+    allowed('currency') && `
       <div class="setting">
         <div>
           <h3>${t('settings.currency')}</h3>
@@ -545,39 +546,50 @@ function renderSettings() {
           <p class="muted small" id="currencyExample">${t('settings.example', { value: money.format(1234.5) })}</p>
         </div>
         ${segmented('currency', t('settings.currency'), Object.fromEntries(Object.keys(CURRENCIES).map((c) => [c, c])))}
-      </div>
+      </div>`,
+    allowed('infobox') && `
       <div class="setting">
         <div>
           <h3>${t('settings.infoBox')}</h3>
           <p class="muted small">${t('settings.infoBoxHint')}</p>
         </div>
         ${segmented('infoBox', t('settings.infoBox'), Object.fromEntries(INFO_MODES.map((m) => [m, t(`infoMode.${m}`)])))}
-      </div>
-    </div>
+      </div>`,
+  ].filter(Boolean).join('');
+  const backup = [
+    allowed('export') && `<button class="btn ghost" data-action="export">${icon('download')}${t('btn.export')}</button>`,
+    allowed('import') && `<label class="btn ghost">${icon('upload')}${t('btn.import')}<input type="file" accept="application/json,.json" data-import hidden></label>`,
+  ].filter(Boolean).join('');
 
-    <div class="section-head"><h2>${t('settings.data')}</h2></div>
-    <div class="card settings">
-      <div class="setting">
-        <div>
-          <h3>${t('settings.backup')}</h3>
-          <p class="muted small">${t('settings.backupHint')}</p>
+  $('#app').innerHTML = `
+    <a href="#/" class="back">${icon('back')}${t('nav.back')}</a>
+    <section class="hero"><h1>${t('settings.title')}</h1></section>
+
+    ${display ? `
+      <div class="section-head"><h2>${t('settings.display')}</h2></div>
+      <div class="card settings">${display}</div>` : ''}
+
+    ${backup ? `
+      <div class="section-head"><h2>${t('settings.data')}</h2></div>
+      <div class="card settings">
+        <div class="setting">
+          <div>
+            <h3>${t('settings.backup')}</h3>
+            <p class="muted small">${t('settings.backupHint')}</p>
+          </div>
+          <div class="setting-actions">${backup}</div>
         </div>
-        <div class="setting-actions">
-          <button class="btn ghost" data-action="export">${icon('download')}${t('btn.export')}</button>
-          <label class="btn ghost">${icon('upload')}${t('btn.import')}<input type="file" accept="application/json,.json" data-import hidden></label>
-        </div>
-      </div>
-    </div>
+      </div>` : ''}
 
     <div class="section-head"><h2>${t('settings.account')}</h2></div>
     <div class="card settings">
       <div class="setting">
         <div>
           <h3>${esc(me().username)}</h3>
-          <p class="muted small">${isAdmin() ? t('role.adminLong') : t('role.user')}</p>
+          <p class="muted small">${isDemo() ? t('role.demo') : isAdmin() ? t('role.adminLong') : t('role.user')}</p>
         </div>
         <div class="setting-actions">
-          <button class="btn ghost" data-action="change-password" data-id="${esc(me().id)}">${icon('key')}${t('pw.change')}</button>
+          ${allowed('password') ? `<button class="btn ghost" data-action="change-password" data-id="${esc(me().id)}">${icon('key')}${t('pw.change')}</button>` : ''}
           <button class="btn ghost" data-action="logout">${icon('logout')}${t('nav.logout')}</button>
         </div>
       </div>

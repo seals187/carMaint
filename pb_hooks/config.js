@@ -12,6 +12,8 @@ const CURRENCIES = ['EUR', 'CHF', 'USD'];
 const currency = env('DEFAULT_CURRENCY', 'EUR').toUpperCase();
 const LANGUAGES = ['de', 'en'];
 const language = env('DEFAULT_LANGUAGE', 'de').toLowerCase();
+// Settings that can be disabled for the demo user
+const DEMO_OPTIONS = ['language', 'currency', 'infobox', 'export', 'import', 'password'];
 
 module.exports = {
   appName: env('APP_NAME', 'CarMaint'),
@@ -28,4 +30,7 @@ module.exports = {
   superuserPassword: env('PB_SUPERUSER_PASSWORD'),
 
   trustedProxyHeaders: env('TRUSTED_PROXY_HEADERS').split(',').map((h) => h.trim()).filter(Boolean),
+
+  demoUsername: env('DEMO_USERNAME'),
+  demoDisabled: env('DEMO_DISABLED', 'password').toLowerCase().split(',').map((o) => o.trim()).filter((o) => DEMO_OPTIONS.includes(o)),
 };
