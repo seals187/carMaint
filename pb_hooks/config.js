@@ -32,5 +32,6 @@ module.exports = {
   trustedProxyHeaders: env('TRUSTED_PROXY_HEADERS').split(',').map((h) => h.trim()).filter(Boolean),
 
   demoUsername: env('DEMO_USERNAME'),
+  demoPassword: env('DEMO_PASSWORD'),
   demoDisabled: env('DEMO_DISABLED', 'password').toLowerCase().split(',').map((o) => o.trim()).filter((o) => DEMO_OPTIONS.includes(o)),
 };

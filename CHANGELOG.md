@@ -6,6 +6,9 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+### Added
+- `DEMO_PASSWORD` in `.env`: the demo user is created automatically on startup if it does not exist yet
+
 ## [0.1.2] – 2026-10-17
 
 ### Added

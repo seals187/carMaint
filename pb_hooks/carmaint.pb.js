@@ -46,6 +46,26 @@ onBootstrap((be) => {
       }
     }
 
+    // Demo user (optional) – created on startup if it does not exist yet
+    if (cfg.demoUsername && cfg.demoPassword) {
+      try {
+        e.app.findFirstRecordByData('users', 'username', cfg.demoUsername);
+      } catch {
+        try {
+          const user = new Record(e.app.findCollectionByNameOrId('users'));
+          user.set('username', cfg.demoUsername);
+          user.set('role', 'user');
+          user.set('settings', { currency: cfg.defaultCurrency });
+          user.setPassword(cfg.demoPassword);
+          user.setVerified(true);
+          e.app.save(user);
+          log.info('CarMaint: demo user created', 'username', cfg.demoUsername);
+        } catch (err) {
+          log.error('CarMaint: could not create the demo user', 'error', String(err));
+        }
+      }
+    }
+
     // PocketBase admin UI (/_/) – optional
     if (cfg.superuserEmail && cfg.superuserPassword) {
       try {
