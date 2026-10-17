@@ -8,6 +8,7 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ### Added
 - App screenshots in the README
+- Link to the live demo in the README
 
 ## [0.1.1] – 2026-10-17
 
