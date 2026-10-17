@@ -79,7 +79,8 @@ const defaultInfoCollapsed = () =>
   settings.infoBox === 'closed' || (settings.infoBox === 'remember' && settings.infoCollapsed);
 
 // Dates and numbers follow the UI language.
-const locale = () => (lang === 'en' ? 'en-GB' : 'de-DE');
+const LOCALES = { de: 'de-DE', en: 'en-GB', es: 'es-ES' };
+const locale = () => LOCALES[lang] ?? 'de-DE';
 const numberFormats = {};
 const fmtNum = (v) => (numberFormats[lang] ??= new Intl.NumberFormat(locale())).format(v);
 const km = (v) => (v ? `${fmtNum(v)} km` : '–');
@@ -366,7 +367,8 @@ function initialLanguage() {
   try { stored = localStorage.getItem(LANG_KEY); } catch {}
   if (LANGUAGES[stored]) return stored;
   if (LANGUAGES[serverConfig.defaultLanguage]) return serverConfig.defaultLanguage;
-  return navigator.language?.toLowerCase().startsWith('de') ? 'de' : 'en';
+  const browser = navigator.language?.slice(0, 2).toLowerCase();
+  return LANGUAGES[browser] ? browser : 'en';
 }
 
 function setLanguage(next) {

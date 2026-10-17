@@ -6,6 +6,12 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+### Added
+- Spanish user interface: switch the language under Settings or on the login page; `DEFAULT_LANGUAGE=es` sets it as default
+
+### Changed
+- On phones, the selectors in the settings (language, currency, vehicle data) use the full width
+
 ## [0.1.5] – 2026-10-17
 
 ### Changed

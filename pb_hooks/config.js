@@ -10,7 +10,7 @@ const env = (key, fallback = '') => {
 
 const CURRENCIES = ['EUR', 'CHF', 'USD'];
 const currency = env('DEFAULT_CURRENCY', 'EUR').toUpperCase();
-const LANGUAGES = ['de', 'en'];
+const LANGUAGES = ['de', 'en', 'es'];
 const language = env('DEFAULT_LANGUAGE', 'de').toLowerCase();
 // Settings that can be disabled for the demo user
 const DEMO_OPTIONS = ['language', 'currency', 'infobox', 'export', 'import', 'password'];

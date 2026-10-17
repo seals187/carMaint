@@ -31,9 +31,9 @@ manage users. Files are `protected` and fetched with a short-lived file token.
 ## Conventions
 
 - **Language:** code, comments, log messages, docs and commit messages in **English**.
-  The UI is bilingual (German/English).
-- **UI texts:** never hard-code strings in `app.js`/`index.html`. Add the key to **both** `de` and
-  `en` in `pb_public/i18n.js` and use `t()` / `tn()` (plural `"one|many"`) or `data-i18n*` attributes.
+  The UI is available in German, English and Spanish.
+- **UI texts:** never hard-code strings in `app.js`/`index.html`. Add the key to **all** languages
+  (`de`, `en`, `es`) in `pb_public/i18n.js` and use `t()` / `tn()` (plural `"one|many"`) or `data-i18n*` attributes.
 - **Stored values stay language-neutral** (entry types, settings keys; fuel values are stored in
   German for backwards compatibility and translated on display).
 - **New server settings** become `.env` variables: read them in `pb_hooks/config.js`, document them in
@@ -61,7 +61,7 @@ docker build -t carmaint:test .
 docker run --rm -p 8090:8090 -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=test1234 carmaint:test
 ```
 
-Then check in a browser: login, add car with photo, add entry with PDF, vehicle data, both languages,
+Then check in a browser: login, add car with photo, add entry with PDF, vehicle data, all languages,
 light/dark mode, mobile width. Validate workflows with `actionlint`.
 
 ## Releases

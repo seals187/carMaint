@@ -466,6 +466,9 @@ dialog.lightbox[open] { display: flex; align-items: center; justify-content: cen
   .search { flex: 1 1 100%; }
   .hero-actions { width: 100%; }
   .hero-actions .btn { margin-left: auto; }
+  .segmented { display: flex; width: 100%; }
+  .segmented label { flex: 1; }
+  .segmented span { padding: 7px 8px; text-align: center; }
 }
 
 @media (prefers-reduced-motion: reduce) {
