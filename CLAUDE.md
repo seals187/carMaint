@@ -25,7 +25,9 @@ Switzerland (CHF, MFK, Stammnummer, Typengenehmigung).
 
 **Data model:** `users` (auth by `username`, `role` admin/user, `settings` JSON), `cars` (`owner`,
 `photos` – first photo is the cover, `info` JSON), `entries` (`car`, `type`, `date` as `YYYY-MM-DD`,
-`attachments`, `attachmentNames` JSON). Access rules: every user only sees their own data; admins
+`attachments`, `attachmentNames` JSON), `reminders` (`car`, `title`, `type`, `intervalKm`/`intervalMonths`,
+`dueKm`/`dueDate`), `documents` (`car`, `kind`, `title`, `validUntil`, `attachments`, `attachmentNames`,
+`reminder`). Access rules: every user only sees their own data; admins
 manage users. Files are `protected` and fetched with a short-lived file token.
 
 ## Conventions

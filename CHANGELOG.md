@@ -6,6 +6,27 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.2.0] – 2026-10-21
+
+### Added
+- Reminders: recurring maintenance due at a mileage and/or a date (e.g. oil change every 15'000 km or 12 months). Set them when adding an entry (“Remind me next time”) or on the car page; the next MFK from the vehicle data counts as a reminder too
+- Overview: “Due soon” board with the columns overdue, this week and later; calendar leaf per reminder, check button to log it as done, the same reminder on several cars grouped. Car cards show a timeline of their due reminders around today (with legend), plus costs this year and cost per km
+- Car page: sidebar with photo, actions, vehicle data, photos and documents; key figures (mileage, costs this year with a mini chart per month, cost per km excluding fuel); reminders grouped by due date, several due on the same day can be logged as done together
+- Service history as PDF (print view of the car's history)
+- Entry dialog: templates (oil change, tyre change, MFK, fuel, wiper blades and own templates), last mileage and cost as hints, recently used workshops, “Save & add another”, drag & drop or paste (Ctrl+V) of receipts
+- New entry type “Fuel”
+- Search across all vehicles and entries in the header (shortcut `/`)
+- Phones: quick entry sheet (fuel / service / receipt photo, mileage stepper) and the number of due items in the header
+- Backups include reminders and documents
+- Documents per vehicle (registration, driving licence, insurance, warranty, other) with photo or PDF and an optional expiry date, optionally with a reminder 30 days before it expires. Existing entries of type “Documents / registration” are moved there automatically
+- Receipts of an entry are shown as file chips (PDF, JPG) in the history
+- Display size in the header (80–140 %), remembered per device
+- “Due soon” on the home page can be collapsed (summary per column); Settings › Display: open, collapsed or remember the last state
+
+### Changed
+- New design: darker palette, smaller car cards (up to four per row), compact history rows (click to expand), filter chips per type with counts; the history no longer contains documents
+- With CHF, numbers and dates use the Swiss format (15'000, 21.10.2026)
+
 ## [0.1.7] – 2026-10-18
 
 ### Added
@@ -82,7 +103,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/seals187/carMaint/compare/v0.1.7...v0.2.0
 [0.1.7]: https://github.com/seals187/carMaint/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/seals187/carMaint/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/seals187/carMaint/compare/v0.1.4...v0.1.5

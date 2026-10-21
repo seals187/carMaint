@@ -7,8 +7,9 @@
 [![Discord](https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/8DU3XPFJQ6)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-A lightweight, self-hosted maintenance log for your vehicles: services, repairs, inspections,
-costs, photos and receipts – with multi-user login. Runs as a single Docker container.
+A lightweight, self-hosted maintenance log for your vehicles: services, repairs, inspections, fuel,
+costs, reminders for upcoming maintenance, documents with expiry dates, photos and receipts – with
+multi-user login. Runs as a single Docker container.
 
 **Stack:** plain HTML/CSS/JS · [PocketBase](https://pocketbase.io) (SQLite) · Docker (amd64, arm64, armv7)
 
@@ -52,12 +53,12 @@ All settings live in `.env` – see [`.env.example`](.env.example) for every opt
 | Variable | Description |
 |---|---|
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | First user (admin), created on first start. Password min. 8 characters |
-| `CARMAINT_VERSION` | `latest`, a fixed version such as `0.1.7`, or `edge` |
+| `CARMAINT_VERSION` | `latest`, a fixed version such as `0.2.0`, or `edge` |
 | `PORT` | Host port (default `8090`) |
 | `DEFAULT_CURRENCY` | `EUR`, `CHF` or `USD` |
 | `DEFAULT_LANGUAGE` | `de`, `en`, `es` or `fr` (default `en`) – used when the browser language is not supported; users can switch in the app |
 | `MAX_FILE_SIZE_MB` | Max. size per uploaded file in MB (default `20`, max. `30`) |
-| `USER_STORAGE_LIMIT_MB` | Max. storage per user for photos and receipts in MB (default `0` = unlimited) |
+| `USER_STORAGE_LIMIT_MB` | Max. storage per user for photos, receipts and documents in MB (default `0` = unlimited) |
 | `ALLOWED_FILE_TYPES` | Allowed upload types: `pdf`, `jpg`, `png` (default `pdf,jpg`) |
 | `TRUSTED_PROXY_HEADERS` | e.g. `X-Forwarded-For` when running behind a reverse proxy |
 
@@ -69,6 +70,8 @@ For access from the internet, put a reverse proxy with HTTPS in front (e.g. Cadd
 ## Usage notes
 
 - **Users:** admins manage accounts under *Settings → Users*. Every user only sees their own vehicles.
+- **Reminders:** when adding an entry, tick *Remind me next time* (km and/or months) – due items appear
+  on the home page and on the car. Documents with an expiry date can remind you 30 days before.
 - **Demo account:** `DEMO_USERNAME` / `DEMO_PASSWORD` create a restricted user on startup;
   `DEMO_DISABLED` hides settings such as *Change password* for it (see [`.env.example`](.env.example)).
 - **Backup:** *Settings → Backup* exports/imports all data of a user as one JSON file.

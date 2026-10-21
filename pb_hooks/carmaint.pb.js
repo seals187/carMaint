@@ -137,7 +137,7 @@ onRecordUpdateRequest((e) => {
   return e.next();
 }, 'users');
 
-// Storage limit per user (USER_STORAGE_LIMIT_MB): checked whenever photos or
+// Storage limit per user (USER_STORAGE_LIMIT_MB): checked whenever photos, documents or
 // receipts are uploaded, including backup imports.
 const checkStorageLimit = (e) => {
   const cfg = require(`${__hooks}/config.js`);
@@ -153,8 +153,8 @@ const checkStorageLimit = (e) => {
   }
   return e.next();
 };
-onRecordCreateRequest(checkStorageLimit, 'cars', 'entries');
-onRecordUpdateRequest(checkStorageLimit, 'cars', 'entries');
+onRecordCreateRequest(checkStorageLimit, 'cars', 'entries', 'documents');
+onRecordUpdateRequest(checkStorageLimit, 'cars', 'entries', 'documents');
 
 // Storage used by the signed-in user (settings page)
 routerAdd('GET', '/api/carmaint/usage', (e) => {

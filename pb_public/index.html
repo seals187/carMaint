@@ -11,6 +11,7 @@
   <link rel="preload" href="fonts/anton-az.woff2" as="font" type="font/woff2" crossorigin>
   <script>
     try { const t = localStorage.getItem('carmaint:theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
+    try { const z = Number(localStorage.getItem('carmaint:zoom')); if (z && z !== 100) document.documentElement.style.zoom = z / 100; } catch {}
   </script>
   <link rel="stylesheet" href="style.css">
   <script src="i18n.js" defer></script>
@@ -20,7 +21,24 @@
   <header class="topbar">
     <div class="container topbar-inner">
       <a href="#/" class="brand logo" id="appName" aria-label="CarMaint"><span class="logo-a">CAR</span><span class="logo-b">MAINT</span></a>
+      <div class="global-search auth-only">
+        <label class="search" data-icon="search">
+          <input type="search" id="globalQ" autocomplete="off" data-i18n-placeholder="search.placeholder" data-i18n-aria="search.aria">
+          <kbd>/</kbd>
+        </label>
+        <div class="search-results" id="searchResults" hidden></div>
+      </div>
+      <button class="due-pill auth-only" id="duePill" data-action="go-due" hidden></button>
       <div class="topbar-actions">
+        <button class="icon-btn auth-only search-toggle" data-action="search-toggle" data-icon="search" data-i18n-title="search.aria" data-i18n-aria="search.aria"></button>
+        <div class="zoom-wrap">
+          <button class="icon-btn" id="zoomBtn" data-icon="textSize" aria-haspopup="true" aria-expanded="false" data-i18n-title="zoom.title" data-i18n-aria="zoom.title"></button>
+          <div class="zoom-menu" id="zoomMenu" hidden>
+            <button class="icon-btn sm" data-zoom="-1" data-icon="minus" data-i18n-title="zoom.smaller" data-i18n-aria="zoom.smaller"></button>
+            <button class="zoom-value" data-zoom="0" id="zoomValue" data-i18n-title="zoom.reset">100 %</button>
+            <button class="icon-btn sm" data-zoom="1" data-icon="plus" data-i18n-title="zoom.larger" data-i18n-aria="zoom.larger"></button>
+          </div>
+        </div>
         <button class="icon-btn" id="themeBtn" data-icon="contrast" data-i18n-title="nav.theme" data-i18n-aria="nav.theme"></button>
         <a href="#/settings" class="icon-btn auth-only" data-icon="settings" data-i18n-title="nav.settings" data-i18n-aria="nav.settings"></a>
         <button class="icon-btn auth-only" data-action="logout" data-icon="logout" data-i18n-title="nav.logout" data-i18n-aria="nav.logout"></button>
@@ -57,36 +75,143 @@
     </form>
   </dialog>
 
-  <dialog id="entryDialog">
+  <dialog id="entryDialog" class="wide">
     <form id="entryForm" autocomplete="off">
-      <h2 id="entryDialogTitle"></h2>
+      <div class="dialog-head">
+        <h2 id="entryDialogTitle"></h2>
+        <button type="button" class="icon-btn" data-close data-icon="x" data-i18n-aria="lb.close"></button>
+      </div>
       <input type="hidden" name="id">
       <input type="hidden" name="car">
-      <div class="row">
-        <label class="field"><span data-i18n="entry.type"></span><select name="type" id="typeSelect"></select></label>
-        <label class="field"><span><span data-i18n="entry.date"></span> *</span><input name="date" type="date" required></label>
+      <div class="field" id="tplField"><span data-i18n="entry.template"></span><div class="chips" id="tplChips"></div></div>
+      <div class="field"><span data-i18n="entry.type"></span><div class="pills" id="typePills" role="radiogroup"></div>
+        <p class="hint" data-i18n-html="entry.docsHint"></p>
       </div>
-      <label class="field"><span><span data-i18n="entry.title"></span> *</span><input name="title" required maxlength="200" data-i18n-placeholder="ph.title"></label>
-      <div class="row">
-        <label class="field"><span data-i18n="entry.mileage"></span><input name="mileage" type="number" min="0"></label>
-        <label class="field"><span><span data-i18n="entry.cost"></span> (<span id="currencySymbol">€</span>)</span><input name="cost" type="number" min="0" step="0.01" data-i18n-placeholder="ph.cost"></label>
+      <div class="row row-title">
+        <label class="field"><span><span data-i18n="entry.title"></span> *</span><input name="title" required maxlength="200" data-i18n-placeholder="ph.title"></label>
+        <div class="field"><label for="entryDate"><span data-i18n="entry.date"></span> *</label>
+          <div class="date-row"><input id="entryDate" name="date" type="date" required><button type="button" class="btn ghost" id="todayBtn" data-i18n="entry.today"></button></div>
+        </div>
       </div>
-      <label class="field"><span data-i18n="entry.shop"></span><input name="shop" maxlength="200" data-i18n-placeholder="ph.shop"></label>
-      <label class="field"><span data-i18n="entry.notes"></span><textarea name="notes" rows="3" maxlength="5000" data-i18n-placeholder="ph.notes"></textarea></label>
-      <div class="field"><span data-i18n="entry.attachments"></span>
+      <div class="row">
+        <div class="field"><label for="entryMileage" data-i18n="entry.mileage"></label><input id="entryMileage" name="mileage" type="number" min="0" inputmode="numeric"><p class="hint" id="mileageHint"></p></div>
+        <div class="field"><label for="entryCost" data-i18n="entry.cost"></label>
+          <div class="affix"><span id="currencySymbol">€</span><input id="entryCost" name="cost" type="number" min="0" step="0.01" inputmode="decimal" data-i18n-placeholder="ph.cost"></div>
+          <p class="hint" id="costHint"></p>
+        </div>
+      </div>
+      <div class="field"><label for="entryShop" data-i18n="entry.shop"></label><input id="entryShop" name="shop" maxlength="200" data-i18n-placeholder="ph.shop"><p class="hint" id="recentShops"></p></div>
+      <label class="field"><span data-i18n="entry.notes"></span><textarea name="notes" rows="2" maxlength="5000" data-i18n-placeholder="ph.notes"></textarea></label>
+      <div class="remind-box" id="remindBox">
+        <label class="check"><input type="checkbox" name="remind"><span data-i18n="remind.label"></span></label>
+        <div class="remind-row">
+          <span data-i18n="remind.in"></span>
+          <span class="unit-input"><input name="remindKm" type="number" min="0" step="1" inputmode="numeric" data-i18n-aria="rem.intervalKm"><span>km</span></span>
+          <span data-i18n="remind.or"></span>
+          <span class="unit-input"><input name="remindMonths" type="number" min="0" max="240" inputmode="numeric" data-i18n-aria="rem.intervalMonths"><span data-i18n="remind.months"></span></span>
+          <span id="remindDue"></span>
+        </div>
+      </div>
+      <div class="field"><span data-i18n="entry.receipts"></span>
+        <div class="dropzone" id="dropzone">
+          <span data-icon="upload"></span>
+          <p><span data-i18n="drop.text"></span> <label class="link"><span data-i18n="drop.pick"></span><input type="file" id="attInput" multiple accept="application/pdf,image/jpeg" hidden></label></p>
+        </div>
         <div class="att-editor" id="attEditor"></div>
-        <label class="btn ghost file-btn" data-icon="paperclip">
-          <span data-i18n="entry.attach"></span>
-          <input type="file" id="attInput" multiple accept="application/pdf,image/jpeg" hidden>
-        </label>
       </div>
       <p class="form-error" hidden></p>
+      <div class="dialog-foot">
+        <span class="muted small kbd-hint" data-i18n="entry.keys"></span>
+        <!-- "Save" comes first so Enter uses it; the CSS shows it last -->
+        <button type="submit" class="btn primary" data-i18n="btn.save"></button>
+        <button type="submit" class="btn ghost" id="saveNext" data-i18n="btn.saveNext"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="reminderDialog">
+    <form id="reminderForm" autocomplete="off">
+      <h2 id="reminderDialogTitle"></h2>
+      <input type="hidden" name="id">
+      <input type="hidden" name="car">
+      <div class="row row-title">
+        <label class="field"><span><span data-i18n="entry.title"></span> *</span><input name="title" required maxlength="200" data-i18n-placeholder="ph.title"></label>
+        <label class="field"><span data-i18n="entry.type"></span><select name="type" id="reminderType"></select></label>
+      </div>
+      <div class="row">
+        <label class="field"><span data-i18n="rem.intervalKm"></span><input name="intervalKm" type="number" min="0" inputmode="numeric" placeholder="15000"></label>
+        <label class="field"><span data-i18n="rem.intervalMonths"></span><input name="intervalMonths" type="number" min="0" max="240" inputmode="numeric" placeholder="12"></label>
+      </div>
+      <div class="row">
+        <label class="field"><span data-i18n="rem.dueKm"></span><input name="dueKm" type="number" min="0" inputmode="numeric"></label>
+        <label class="field"><span data-i18n="rem.dueDate"></span><input name="dueDate" type="date"></label>
+      </div>
+      <p class="muted small" data-i18n="rem.hint"></p>
+      <p class="form-error" hidden></p>
       <div class="dialog-actions">
+        <button type="button" class="icon-btn danger" id="reminderDelete" data-icon="trash" data-i18n-title="btn.delete" data-i18n-aria="btn.delete"></button>
+        <button type="button" class="btn ghost" id="reminderDone" data-i18n="rem.done"></button>
+        <span class="grow"></span>
         <button type="button" class="btn ghost" data-close data-i18n="btn.cancel"></button>
         <button type="submit" class="btn primary" data-i18n="btn.save"></button>
       </div>
     </form>
   </dialog>
+
+  <dialog id="docDialog" aria-labelledby="docDialogTitle">
+    <form id="docForm" autocomplete="off">
+      <div class="dialog-head">
+        <h2 id="docDialogTitle"></h2>
+        <button type="button" class="icon-btn" data-close data-icon="x" data-i18n-aria="lb.close"></button>
+      </div>
+      <input type="hidden" name="id">
+      <input type="hidden" name="car">
+      <div class="field"><span data-i18n="doc.kind"></span><div class="kind-chips" id="docKinds" role="radiogroup"></div></div>
+      <label class="field"><span><span data-i18n="doc.name"></span> *</span><input name="title" required maxlength="200"></label>
+      <label class="field"><span><span data-i18n="doc.validUntil"></span> <span class="dim" data-i18n="doc.optional"></span></span><input name="validUntil" type="date"></label>
+      <label class="remind-box check" id="docRemindBox"><input type="checkbox" name="remind"><span id="docRemindText"></span></label>
+      <div class="dropzone" id="docDrop">
+        <span data-icon="upload"></span>
+        <p><span data-i18n="doc.drop"></span> <label class="link"><span data-i18n="drop.pick"></span><input type="file" id="docInput" multiple accept="application/pdf,image/jpeg" hidden></label></p>
+      </div>
+      <div class="att-editor" id="docFiles"></div>
+      <p class="form-error" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" class="icon-btn danger" id="docDelete" data-icon="trash" data-i18n-title="btn.delete" data-i18n-aria="btn.delete"></button>
+        <span class="grow"></span>
+        <button type="button" class="btn ghost" data-close data-i18n="btn.cancel"></button>
+        <button type="submit" class="btn primary" data-i18n="btn.save"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="quickDialog" class="sheet" aria-labelledby="quickTitle">
+    <form id="quickForm" autocomplete="off">
+      <div class="sheet-grip" data-close></div>
+      <h2 id="quickTitle" data-i18n="quick.title"></h2>
+      <div class="quick-cars" id="quickCars"></div>
+      <div class="quick-types">
+        <label class="quick-tile"><input type="radio" name="type" value="fuel"><span data-icon="fuel"><span data-i18n="tpl.fuel"></span></span></label>
+        <label class="quick-tile"><input type="radio" name="type" value="service"><span data-icon="wrench"><span data-i18n="type.service"></span></span></label>
+        <label class="quick-tile" id="quickPhotoTile"><input type="file" id="quickPhoto" accept="image/jpeg" capture="environment" hidden><span data-icon="camera"><span id="quickPhotoLabel" data-i18n="quick.receipt"></span></span></label>
+      </div>
+      <div class="field"><label for="quickKm" data-i18n="entry.mileage"></label>
+        <div class="stepper">
+          <button type="button" class="btn ghost" data-step="-1" aria-label="−100 km">−</button>
+          <input id="quickKm" name="mileage" type="number" min="0" inputmode="numeric">
+          <button type="button" class="btn ghost" data-step="1" aria-label="+100 km">+</button>
+        </div>
+      </div>
+      <div class="field"><label for="quickCost" data-i18n="entry.cost"></label>
+        <div class="affix lg"><span id="quickCurrency"></span><input id="quickCost" name="cost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+      </div>
+      <p class="form-error" hidden></p>
+      <button type="submit" class="btn primary block lg" data-i18n="btn.save"></button>
+      <p class="muted small center-text" data-i18n="quick.foot"></p>
+    </form>
+  </dialog>
+
+  <button class="fab auth-only" id="quickFab" data-action="quick-add" data-icon="plus" data-i18n-aria="quick.title" data-i18n-title="quick.title" hidden></button>
 
   <dialog id="infoDialog">
     <form id="infoForm" autocomplete="off">

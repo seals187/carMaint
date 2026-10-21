@@ -17,17 +17,39 @@ const CURRENCIES = {
 };
 
 const INFO_MODES = ['open', 'closed', 'remember'];
-const DEFAULT_SETTINGS = { currency: 'EUR', infoBox: 'remember', infoCollapsed: false, language: 'de' };
+const DEFAULT_SETTINGS = { currency: 'EUR', infoBox: 'remember', infoCollapsed: false, dueBox: 'remember', dueCollapsed: false, language: 'de', templates: [] };
 
 const TYPES = {
   service:    { color: 'blue' },
   repair:     { color: 'orange' },
   inspection: { color: 'green' },
   tires:      { color: 'purple' },
+  fuel:       { color: 'yellow' },
   documents:  { color: 'teal' },
   other:      { color: 'gray' },
 };
 const typeLabel = (type) => t(`type.${TYPES[type] ? type : 'other'}`);
+// Types of history entries (documents have their own section since 0.2)
+const ENTRY_TYPES = Object.keys(TYPES).filter((type) => type !== 'documents');
+
+// Templates in the entry dialog; km/months preset the reminder for the next time.
+// Custom templates live in the user settings ({ title, type, km, months }).
+const TEMPLATES = [
+  { key: 'oil', type: 'service', km: 15000, months: 12 },
+  { key: 'tires', type: 'tires', months: 6 },
+  { key: 'inspection', type: 'inspection', months: 24 },
+  { key: 'fuel', type: 'fuel' },
+  { key: 'wipers', type: 'repair' },
+];
+
+// Reminder levels: overdue (red), soon (yellow), upcoming (still listed on the home page), later
+const SOON_KM = 1000;
+const SOON_DAYS = 7;
+const UPCOMING_KM = 3000;
+const UPCOMING_DAYS = 60;
+const QUICK_KM_STEP = 100;
+// Hues for cars without a photo (stable per car)
+const CAR_HUES = [355, 212, 262, 172, 32, 330];
 
 const ICONS = {
   car: '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
@@ -47,6 +69,10 @@ const ICONS = {
   idCard: '<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.17 15a3 3 0 0 1 5.66 0"/><path d="M16 10h2"/><path d="M16 14h2"/>',
   star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  minus: '<path d="M5 12h14"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  textSize: '<path d="M21 14h-5"/><path d="M16 16v-3.5a2.5 2.5 0 0 1 5 0V16"/><path d="M4.5 13h6"/><path d="m3 16 4.5-9 4.5 9"/>',
   chevronLeft: '<path d="m15 18-6-6 6-6"/>',
   chevronRight: '<path d="m9 18 6-6-6-6"/>',
   chevronDown: '<path d="m6 9 6 6 6-6"/>',
@@ -54,6 +80,10 @@ const ICONS = {
   github: '<path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
   key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>',
+  fuel: '<path d="M3 22h12"/><path d="M4 9h10"/><path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0V9.83a2 2 0 0 0-.59-1.42L18 5"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  printer: '<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
   userPlus: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/>',
 };
 
@@ -85,27 +115,59 @@ function wordmark(name) {
 
 let settings = { ...DEFAULT_SETTINGS };
 let money = currencyFormat(settings.currency);
+let money0 = currencyFormat(settings.currency, 0); // whole amounts for tiles and the chart
 
-function currencyFormat(code) {
-  return new Intl.NumberFormat(CURRENCIES[code].locale, { style: 'currency', currency: code, currencyDisplay: 'narrowSymbol' });
+function currencyFormat(code, digits) {
+  const fraction = digits == null ? {} : { minimumFractionDigits: digits, maximumFractionDigits: digits };
+  return new Intl.NumberFormat(CURRENCIES[code].locale, { style: 'currency', currency: code, currencyDisplay: 'narrowSymbol', ...fraction });
+}
+
+function setCurrency(code) {
+  money = currencyFormat(code);
+  money0 = currencyFormat(code, 0);
 }
 
 const currencySymbol = () => money.formatToParts(0).find((p) => p.type === 'currency')?.value ?? settings.currency;
 const defaultInfoCollapsed = () =>
   settings.infoBox === 'closed' || (settings.infoBox === 'remember' && settings.infoCollapsed);
+const defaultDueCollapsed = () =>
+  settings.dueBox === 'closed' || (settings.dueBox === 'remember' && settings.dueCollapsed);
 
-// Dates and numbers follow the UI language.
+// Dates and numbers follow the UI language; with CHF the Swiss variant (15'000, 21.10.2026).
 const LOCALES = { de: 'de-DE', en: 'en-GB', es: 'es-ES', fr: 'fr-FR' };
-const locale = () => LOCALES[lang] ?? 'de-DE';
+const SWISS_LOCALES = { de: 'de-CH', fr: 'fr-CH' };
+const locale = () => (settings.currency === 'CHF' && SWISS_LOCALES[lang]) || LOCALES[lang] || 'de-DE';
 const numberFormats = {};
-const fmtNum = (v) => (numberFormats[lang] ??= new Intl.NumberFormat(locale())).format(v);
+const fmtNum = (v, digits) => (numberFormats[`${locale()}|${digits}`] ??= new Intl.NumberFormat(locale(),
+  digits == null ? {} : { minimumFractionDigits: digits, maximumFractionDigits: digits })).format(v);
 const km = (v) => (v ? `${fmtNum(v)} km` : '–');
-const fmtDate = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString(locale(), { day: '2-digit', month: 'short', year: 'numeric' }) : '–');
+const asDate = (iso) => new Date(`${iso}T00:00:00`);
+const fmtDate = (iso) => (iso ? asDate(iso).toLocaleDateString(locale(), { day: '2-digit', month: 'short', year: 'numeric' }) : '–');
+const fmtDateNum = (iso) => asDate(iso).toLocaleDateString(locale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
+const fmtDayMonth = (iso) => asDate(iso).toLocaleDateString(locale(), { day: '2-digit', month: '2-digit' });
+const fmtMonthYear = (iso) => asDate(iso).toLocaleDateString(locale(), { month: 'short', year: 'numeric' });
 const today = () => {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0, 10);
 };
+const daysUntil = (iso) => Math.round((asDate(iso) - asDate(today())) / 864e5);
+const thisYear = () => today().slice(0, 4);
+
+function addDays(iso, days) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// "2026-01-31" + 1 month = "2026-02-28"
+function addMonths(iso, months) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const target = new Date(Date.UTC(y, m - 1 + months, 1));
+  const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(d, last));
+  return target.toISOString().slice(0, 10);
+}
 
 // Fuel values are stored in German (existing data); only the display is translated.
 const FUELS = { Benzin: 'fuel.petrol', Diesel: 'fuel.diesel', Hybrid: 'fuel.hybrid', 'Plug-in-Hybrid': 'fuel.plugin', Elektro: 'fuel.electric', 'Erdgas / LPG': 'fuel.gas' };
@@ -132,7 +194,7 @@ const fieldName = (f) => t(`info.${f.key}`);
 const fieldLabel = (f) => (f.unit ? `${fieldName(f)} (${f.unit()})` : fieldName(f));
 
 function dueBadge(iso) {
-  const days = Math.round((new Date(`${iso}T00:00:00`) - new Date(`${today()}T00:00:00`)) / 864e5);
+  const days = daysUntil(iso);
   if (days < 0) return `<span class="badge" data-color="red">${t('due.overdue')}</span>`;
   if (days === 0) return `<span class="badge" data-color="orange">${t('due.today')}</span>`;
   if (days <= 60) return `<span class="badge" data-color="orange">${tn('due.inDays', days)}</span>`;
@@ -288,16 +350,19 @@ const carFile = (car, name) => `cars/${car.id}/${name}`;
 const entryFile = (entry, name) => `entries/${entry.id}/${name}`;
 const attachmentLabel = (entry, name) => entry?.attachmentNames?.[name] || displayName(name);
 
-// Uploads attachments and remembers their original names (the server sanitizes file names).
-async function uploadAttachments(entry, files) {
+const docFile = (doc, name) => `documents/${doc.id}/${name}`;
+
+// Uploads attachments (of an entry or document) and remembers their original
+// names (the server sanitizes file names).
+async function uploadAttachments(entry, files, collection = 'entries') {
   const before = new Set(entry.attachments);
-  const updated = await uploadFiles('entries', entry.id, 'attachments', files);
+  const updated = await uploadFiles(collection, entry.id, 'attachments', files);
   const names = {};
   for (const name of updated.attachments) {
     if (entry.attachmentNames?.[name]) names[name] = entry.attachmentNames[name];
   }
   updated.attachments.filter((name) => !before.has(name)).forEach((name, i) => { names[name] = files[i]?.name ?? name; });
-  return api('PATCH', rec('entries', entry.id), { attachmentNames: names });
+  return api('PATCH', rec(collection, entry.id), { attachmentNames: names });
 }
 
 const MIME_EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif', 'image/bmp': '.bmp', 'image/avif': '.avif', 'application/pdf': '.pdf' };
@@ -365,24 +430,153 @@ function openFile(url, name) {
 
 let serverConfig = { appName: 'CarMaint', defaultCurrency: 'EUR', defaultLanguage: 'en', version: 'dev', maxFileSizeMB: 20, storageLimitMB: 0,
   fileTypes: { attachments: ['application/pdf', 'image/jpeg'], photos: ['image/jpeg'] } };
-let db = { cars: [], entries: [] };
+let db = { cars: [], entries: [], reminders: [], documents: [] };
 
 async function loadData() {
-  const [cars, entries] = await Promise.all([listAll('cars', '&sort=created'), listAll('entries')]);
-  db = { cars, entries };
+  const [cars, entries, reminders, documents] = await Promise.all([
+    listAll('cars', '&sort=created'), listAll('entries'), listAll('reminders'), listAll('documents', '&sort=created'),
+  ]);
+  db = { cars, entries, reminders, documents };
 }
 
 const carById = (id) => db.cars.find((c) => c.id === id);
 const entryById = (id) => db.entries.find((e) => e.id === id);
+const reminderById = (id) => db.reminders.find((r) => r.id === id);
+const documentById = (id) => db.documents.find((d) => d.id === id);
+
+// Shows a file of an entry or document: images in the viewer (together with the
+// other images), PDFs in a new tab. Without a name: the first image or file.
+async function viewFiles(record, pathOf, name = null) {
+  const target = name ?? record?.attachments.find(isImageName) ?? record?.attachments[0];
+  if (!target) return;
+  if (isImageName(target)) {
+    const images = record.attachments.filter(isImageName);
+    openLightbox(images.map((n) => pathOf(record, n)), images.indexOf(target));
+  } else {
+    openFile(await fileObjectUrl(pathOf(record, target)), attachmentLabel(record, target));
+  }
+}
 const sum = (list) => list.reduce((total, e) => total + (Number(e.cost) || 0), 0);
 const entriesFor = (carId) => db.entries
   .filter((e) => e.car === carId)
   .sort((a, b) => b.date.localeCompare(a.date) || (b.mileage || 0) - (a.mileage || 0));
+const carName = (car) => `${car.make} ${car.model}`;
+const carHue = (car) => CAR_HUES[[...car.id].reduce((h, c) => h + c.charCodeAt(0), 0) % CAR_HUES.length];
 
-// Documents = files attached to entries of type "documents" (newest first).
-const documentsFor = (carId) => entriesFor(carId)
-  .filter((e) => e.type === 'documents')
-  .flatMap((entry) => entry.attachments.map((name) => ({ entry, name })));
+/* ---------- Statistics ---------- */
+
+const costThisYear = (entries) => sum(entries.filter((e) => e.date.startsWith(thisYear())));
+
+// Kilometres covered by the recorded entries (and the current mileage).
+function kmRange(cars) {
+  let driven = 0;
+  for (const car of cars) {
+    const values = entriesFor(car.id).map((e) => e.mileage).filter(Boolean);
+    if (car.mileage) values.push(car.mileage);
+    if (values.length > 1) driven += Math.max(...values) - Math.min(...values);
+  }
+  return driven;
+}
+
+// Running costs per km, without fuel; null until enough kilometres are known.
+function costPerKm(cars) {
+  const driven = kmRange(cars);
+  if (driven < 100) return null;
+  const ids = new Set(cars.map((c) => c.id));
+  return sum(db.entries.filter((e) => ids.has(e.car) && e.type !== 'fuel')) / driven;
+}
+
+/* ---------- Reminders ---------- */
+
+// The next vehicle inspection (MFK) from the vehicle data counts as a reminder too,
+// unless the car already has its own inspection reminder.
+function remindersFor(carId) {
+  const car = carById(carId);
+  const list = db.reminders.filter((r) => r.car === carId);
+  const next = car.info?.nextInspection;
+  if (next && !list.some((r) => r.type === 'inspection')) {
+    list.push({ id: `mfk:${car.id}`, car: car.id, virtual: true, type: 'inspection', title: t('tpl.inspection'), dueDate: next, dueKm: 0, intervalKm: 0, intervalMonths: 0 });
+  }
+  return list.map(reminderState).sort((a, b) => b.progress - a.progress);
+}
+
+const allReminders = () => db.cars.flatMap((c) => remindersFor(c.id));
+const findReminder = (id) => allReminders().find((s) => s.r.id === id);
+
+function reminderState(r) {
+  const car = carById(r.car);
+  const kmLeft = r.dueKm ? r.dueKm - (car.mileage || 0) : null;
+  const days = r.dueDate ? daysUntil(r.dueDate) : null;
+  const within = (kmLimit, dayLimit) => (kmLeft !== null && kmLeft <= kmLimit) || (days !== null && days <= dayLimit);
+  const level = (kmLeft !== null && kmLeft <= 0) || (days !== null && days < 0) ? 'overdue'
+    : within(SOON_KM, SOON_DAYS) ? 'soon'
+    : within(UPCOMING_KM, UPCOMING_DAYS) ? 'upcoming' : 'later';
+  // Share of the interval that has passed (for the progress bar and the order)
+  const kmPart = kmLeft === null ? 0 : 1 - kmLeft / (r.intervalKm || 10000);
+  const dayPart = days === null ? 0 : 1 - days / ((r.intervalMonths || 12) * 30.44);
+  const progress = Math.max(kmPart, dayPart);
+  // Whichever comes first decides the label
+  const byKm = kmLeft !== null && (days === null || kmPart >= dayPart);
+  let label;
+  if (level === 'overdue') {
+    const kmOver = kmLeft !== null && kmLeft <= 0;
+    if (days !== null && days < 0 && (!kmOver || !byKm)) label = tn('due.overdueDays', -days);
+    else label = kmLeft === 0 ? t('due.today') : t('due.overdueKm', { km: km(-kmLeft) });
+  } else if (byKm) {
+    label = level === 'later' ? t('due.atKm', { km: km(r.dueKm) }) : t('due.inKm', { km: km(kmLeft) });
+  } else if (days === 0) {
+    label = t('due.today');
+  } else {
+    label = days <= UPCOMING_DAYS ? tn('due.inDays', days) : fmtMonthYear(r.dueDate);
+  }
+  return { r, car, kmLeft, days, level, label, byKm, progress: Math.min(1, Math.max(0, progress)) };
+}
+
+// "every 15'000 km", "yearly 30.10.", "due 09.10.2026"
+function reminderSchedule(r) {
+  if (r.intervalKm) return t('rem.everyKm', { km: km(r.intervalKm) });
+  if (r.intervalMonths === 12 && r.dueDate) return t('rem.yearly', { date: fmtDayMonth(r.dueDate) });
+  if (r.intervalMonths) return tn('rem.everyMonths', r.intervalMonths);
+  if (r.dueDate) return t('rem.dueOn', { date: fmtDateNum(r.dueDate) });
+  return r.dueKm ? t('rem.dueAt', { km: km(r.dueKm) }) : '';
+}
+
+const documentsFor = (carId) => db.documents.filter((d) => d.car === carId);
+// The history shows maintenance only; documents have their own section.
+const historyFor = (carId) => entriesFor(carId).filter((e) => e.type !== 'documents');
+
+// Since 0.2 documents are their own records. Entries of the former type
+// "documents" are moved once (files included); the entry is removed afterwards.
+const DOC_KINDS = ['registration', 'license', 'insurance', 'warranty', 'other'];
+const DOC_KIND_ICONS = { registration: 'idCard', license: 'idCard', insurance: 'shield', warranty: 'shield', other: 'file' };
+const DOC_REMIND_DAYS = 30;
+
+function guessDocKind(title) {
+  if (/führer|licen[cs]e|conduire|conducir/i.test(title)) return 'license';
+  if (/fahrzeugausweis|registration|circulation|circulación|permiso/i.test(title)) return 'registration';
+  if (/versicherung|insurance|assurance|seguro/i.test(title)) return 'insurance';
+  if (/garantie|warranty|garantía/i.test(title)) return 'warranty';
+  return 'other';
+}
+
+async function moveLegacyDocuments() {
+  for (const entry of db.entries.filter((e) => e.type === 'documents')) {
+    let doc = null;
+    try {
+      doc = await api('POST', rec('documents'), { car: entry.car, kind: guessDocKind(entry.title), title: entry.title });
+      const files = await Promise.all(entry.attachments.map(async (name) => ({
+        blob: await fetchFile(entryFile(entry, name)), name: attachmentLabel(entry, name),
+      })));
+      if (files.length) doc = await uploadAttachments(doc, files, 'documents');
+      await api('DELETE', rec('entries', entry.id));
+      db.entries = db.entries.filter((e) => e.id !== entry.id);
+      upsertLocal('documents', doc);
+    } catch (err) {
+      console.warn('Document entry could not be moved', err);
+      if (doc) await api('DELETE', rec('documents', doc.id)).catch(() => {});
+    }
+  }
+}
 
 function upsertLocal(list, record) {
   const items = db[list];
@@ -413,23 +607,28 @@ function setLanguage(next) {
   settings.language = next;
   try { localStorage.setItem(LANG_KEY, next); } catch {}
   translateStatic();
-  $('#typeSelect').innerHTML = Object.keys(TYPES).map((key) => `<option value="${key}">${typeLabel(key)}</option>`).join('');
+  const types = Object.keys(TYPES).map((key) => `<option value="${key}">${typeLabel(key)}</option>`).join('');
+  $('#typePills').innerHTML = ENTRY_TYPES.map((key) => `
+    <label><input type="radio" name="type" value="${key}"><span>${typeLabel(key)}</span></label>`).join('');
+  $('#reminderType').innerHTML = types;
 }
 
 function applyUserSettings() {
   const s = { ...DEFAULT_SETTINGS, currency: serverConfig.defaultCurrency, language: lang, ...(me()?.settings ?? {}) };
   if (!CURRENCIES[s.currency]) s.currency = DEFAULT_SETTINGS.currency;
   if (!INFO_MODES.includes(s.infoBox)) s.infoBox = DEFAULT_SETTINGS.infoBox;
+  if (!INFO_MODES.includes(s.dueBox)) s.dueBox = DEFAULT_SETTINGS.dueBox;
   if (!LANGUAGES[s.language]) s.language = lang;
+  if (!Array.isArray(s.templates)) s.templates = [];
   settings = s;
-  money = currencyFormat(s.currency);
+  setCurrency(s.currency);
   setLanguage(s.language);
 }
 
 // Settings belong to the user account and apply on all devices.
 async function saveSettings(next) {
   settings = { ...settings, ...next };
-  money = currencyFormat(settings.currency);
+  setCurrency(settings.currency);
   try {
     const record = await api('PATCH', rec('users', me().id), { settings });
     setAuth({ ...auth, record });
@@ -455,14 +654,19 @@ async function enterApp() {
   document.body.classList.remove('logged-out');
   applyUserSettings();
   infoCollapsed = defaultInfoCollapsed();
+  dueCollapsed = defaultDueCollapsed();
   currentCarId = null;
   await loadData();
   route();
+  if (db.entries.some((e) => e.type === 'documents')) {
+    await moveLegacyDocuments();
+    route();
+  }
 }
 
 function resetSession() {
   setAuth(null);
-  db = { cars: [], entries: [] };
+  db = { cars: [], entries: [], reminders: [], documents: [] };
   forgetFiles();
   fileTokenCache = { promise: null, at: 0 };
   document.querySelectorAll('dialog[open]').forEach((d) => d.close());
@@ -513,8 +717,10 @@ function renderLogin() {
 /* ---------- Views ---------- */
 
 let currentCarId = null;
-let filter = { type: 'all', q: '' };
+let filter = { type: 'all' };
 let infoCollapsed = false;
+let dueCollapsed = false;
+const openEntries = new Set(); // expanded rows in the history
 
 function route() {
   if (!auth) return renderLogin();
@@ -525,7 +731,7 @@ function route() {
     renderSettings();
   } else if (car) {
     if (car.id !== currentCarId) {
-      filter = { type: 'all', q: '' };
+      filter = { type: 'all' };
       infoCollapsed = defaultInfoCollapsed();
     }
     currentCarId = car.id;
@@ -534,7 +740,17 @@ function route() {
     currentCarId = null;
     renderHome();
   }
+  renderDuePill();
   hydrate();
+}
+
+// Phones: number of due reminders next to the logo (instead of the search field)
+function renderDuePill() {
+  const pill = $('#duePill');
+  const n = auth ? allReminders().filter((s) => s.level === 'overdue' || s.level === 'soon').length : 0;
+  pill.hidden = !n;
+  pill.textContent = tn('nav.due', n);
+  $('#quickFab').hidden = !auth || !db.cars.length || !!location.hash.match(/^#\/settings/);
 }
 
 function emptyState(iconName, title, text, action = '') {
@@ -549,18 +765,143 @@ function emptyState(iconName, title, text, action = '') {
 
 function renderHome() {
   const addBtn = (label) => `<button class="btn primary" data-action="add-car">${icon('plus')}${label}</button>`;
+  const perKm = costPerKm(db.cars);
+  const summary = [
+    tn('count.cars', db.cars.length),
+    t('home.yearSoFar', { year: thisYear(), amount: `<strong>${money.format(costThisYear(db.entries))}</strong>` }),
+    perKm !== null && t('home.perKm', { amount: money.format(perKm) }),
+  ].filter(Boolean).join(' · ');
+  const due = allReminders().filter((s) => s.level !== 'later');
   $('#app').innerHTML = `
     <section class="hero">
       <div>
         <h1>${t('home.title')}</h1>
-        <p class="muted">${tn('count.cars', db.cars.length)} · ${tn('count.entries', db.entries.length)} · ${t('home.total', { amount: money.format(sum(db.entries)) })}</p>
+        ${db.cars.length ? `<p class="muted hero-sub">${summary}</p>` : ''}
       </div>
       ${db.cars.length ? addBtn(t('home.addCar')) : ''}
     </section>
+    ${due.length ? `
+      <section id="due"${dueCollapsed ? ' class="collapsed"' : ''}>
+        <button class="section-head due-toggle" data-action="toggle-due" aria-expanded="${!dueCollapsed}" aria-controls="dueBoard">
+          <h2>${t('home.due')}</h2><span class="count-pill">${due.length}</span>${icon('chevronDown')}
+          <span class="due-summary">${DUE_COLUMNS.map(([level, key]) => [level, key, due.filter((s) => s.level === level).length])
+            .filter(([, , n]) => n).map(([level, key, n]) => `<span><span class="dot" data-level="${level}"></span>${t(key)} ${n}</span>`).join('')}</span>
+        </button>
+        ${dueBoard(due)}
+      </section>` : ''}
     ${db.cars.length
-      ? `<div class="grid">${db.cars.map(carCard).join('')}</div>`
+      ? `<div class="grid">${db.cars.map(carCard).join('')}
+           <button class="add-card" data-action="add-car">${icon('plus')}<span>${t('home.addAnother')}</span></button>
+         </div>`
       : emptyState('car', t('home.emptyTitle'), t('home.emptyText'), addBtn(t('home.addFirstCar')))}`;
 }
+
+// "Due soon" on the home page: one column per level; the same reminder on
+// several cars is grouped (collapsible).
+const DUE_COLUMNS = [['overdue', 'due.colOverdue'], ['soon', 'due.colSoon'], ['upcoming', 'due.colLater']];
+const collapsedDue = new Set();
+// Soonest first; mileage counts as ~50 km per day
+const soonest = (s) => Math.min(s.days ?? Infinity, s.kmLeft === null ? Infinity : s.kmLeft / 50);
+const bySoonest = (a, b) => soonest(a) - soonest(b);
+// "Do., 22.10." -> "Do, 22.10."
+const noWeekdayDot = (s) => s.replace(/^(\p{L}+)\./u, '$1');
+const fmtDateDay = (iso) => noWeekdayDot(asDate(iso).toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }));
+
+function dueBoard(due) {
+  return `<div class="due-board" id="dueBoard">${DUE_COLUMNS.map(([level, key]) => {
+    const items = due.filter((s) => s.level === level).sort(bySoonest);
+    if (!items.length) return '';
+    const groups = new Map();
+    for (const s of items) {
+      const k = s.r.title.trim().toLowerCase();
+      groups.set(k, [...(groups.get(k) ?? []), s]);
+    }
+    return `
+      <section class="card due-col" data-level="${level}">
+        <header><h3>${t(key)}</h3><span class="due-count">${items.length}</span></header>
+        ${[...groups].map(([k, list]) => (list.length > 1 ? dueGroup(`${level}|${k}`, list) : dueRow(list[0]))).join('')}
+      </section>`;
+  }).join('')}</div>`;
+}
+
+// Date (or km) that decides, how far away it is, and the other limit if there is one
+function dueWhen(s) {
+  const { r, days, kmLeft } = s;
+  // Overdue: whichever limit was actually passed
+  const kmOver = kmLeft !== null && kmLeft <= 0;
+  const byDate = s.level === 'overdue' ? days !== null && days < 0 && !(kmOver && s.byKm) : !!r.dueDate && !s.byKm;
+  let rel;
+  if (s.level === 'overdue') rel = byDate ? tn('due.since', -days) : t('due.overdueKm', { km: km(-kmLeft) });
+  else if (byDate) rel = days === 0 ? t('due.today') : days === 1 ? t('due.tomorrow') : days <= UPCOMING_DAYS ? tn('due.inDays', days) : fmtMonthYear(r.dueDate);
+  else rel = t('due.inKm', { km: km(kmLeft) });
+  // Calendar leaf: month + day, or "km" + thousands for mileage reminders
+  const date = byDate && asDate(r.dueDate);
+  return {
+    leafTop: date ? date.toLocaleDateString(locale(), { month: 'short' }).replace('.', '') : 'km',
+    leafNum: date ? String(date.getDate()).padStart(2, '0') : `${fmtNum(Math.round(r.dueKm / 1000))}k`,
+    full: byDate ? fmtDateDay(r.dueDate) : km(r.dueKm),
+    short: byDate ? fmtDayMonth(r.dueDate) : km(r.dueKm),
+    day: byDate ? noWeekdayDot(date.toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: '2-digit' })) : km(r.dueKm),
+    rel,
+    other: byDate ? (r.dueKm ? t('due.orAtKm', { km: km(r.dueKm) }) : '') : (r.dueDate ? t('due.orOn', { date: fmtDateNum(r.dueDate) }) : ''),
+  };
+}
+
+// grouped: the title is shown by the group, the row names the car
+function dueRow(s, grouped = false) {
+  const id = esc(s.r.id);
+  const when = dueWhen(s);
+  const tip = [when.full, when.other].filter(Boolean).join(' · ');
+  return `
+    <div class="due-row">
+      <span class="leaf" title="${esc(tip)}"><span>${esc(when.leafTop)}</span><strong>${esc(when.leafNum)}</strong></span>
+      <button class="due-main" data-action="edit-reminder" data-id="${id}" title="${esc(tip)}">
+        ${grouped
+          ? `<span class="due-title">${esc(carName(s.car))}</span><span class="muted">${esc(when.rel)}</span>`
+          : `<strong class="due-title">${esc(s.r.title)}</strong><span class="muted">${esc(carName(s.car))} · <span class="due-rel">${esc(when.rel)}</span></span>`}
+      </button>
+      <button class="check-btn" data-action="reminder-done" data-id="${id}" title="${t('rem.done')}" aria-label="${esc(`${t('rem.done')}: ${s.r.title} · ${carName(s.car)}`)}">${icon('check')}</button>
+    </div>`;
+}
+
+function dueGroup(key, list) {
+  const open = !collapsedDue.has(key);
+  return `
+    <div class="due-group">
+      <button class="due-group-head" data-action="toggle-due-group" data-key="${esc(key)}" aria-expanded="${open}">
+        <strong>${esc(list[0].r.title)}</strong><span class="muted small">${tn('count.cars', list.length)}${icon('chevronDown')}</span>
+      </button>
+      <div class="due-sub">${list.map((s) => dueRow(s, true)).join('')}</div>
+    </div>`;
+}
+
+// Car card footer: timeline of the due reminders (or the next one) around today,
+// with a legend below. The axis spans at least one week back and a month ahead.
+const CARD_DUE_MAX = 4;
+const TIMELINE_DAYS = [-7, 30];
+
+function carTimeline(states) {
+  const due = states.filter((s) => s.level !== 'later').sort(bySoonest);
+  const list = (due.length ? due : states.slice(0, 1)).slice(0, CARD_DUE_MAX);
+  const days = list.map(soonest);
+  const lo = Math.min(TIMELINE_DAYS[0], ...days);
+  const hi = Math.max(TIMELINE_DAYS[1], ...days);
+  const pos = (d) => `${(4 + (d - lo) / (hi - lo) * 92).toFixed(1)}%`;
+  const items = list.map((s) => ({ s, when: dueWhen(s) }));
+  return `
+    <div class="timeline-bar" aria-hidden="true">
+      <span class="tl-today" style="left:${pos(0)}"></span>
+      ${items.map(({ s, when }, i) => `<span class="dot" data-level="${s.level}" style="left:${pos(days[i])}" title="${esc(`${s.r.title} · ${when.short} · ${when.rel}`)}"></span>`).join('')}
+    </div>
+    <ul class="tl-legend">${items.map(({ s, when }) => `
+      <li><span class="dot" data-level="${s.level}"></span>${esc(s.r.title)} <span class="muted">${esc(when.short)}</span></li>`).join('')}
+    </ul>`;
+}
+
+// Cars without a photo get a colour gradient instead.
+const carMedia = (car, thumb) => (car.photos[0]
+  ? `<img data-file="${esc(carFile(car, car.photos[0]))}" data-thumb="${thumb}" alt="">`
+  : `<span class="car-tint" style="--hue:${carHue(car)}"></span>`);
 
 // The demo user (DEMO_USERNAME) can have single settings disabled (DEMO_DISABLED).
 const isDemo = () => !!serverConfig.demo && me()?.username === serverConfig.demo.username;
@@ -592,6 +933,14 @@ function renderSettings() {
           <p class="muted small">${t('settings.infoBoxHint')}</p>
         </div>
         ${segmented('infoBox', t('settings.infoBox'), Object.fromEntries(INFO_MODES.map((m) => [m, t(`infoMode.${m}`)])))}
+      </div>`,
+    allowed('infobox') && `
+      <div class="setting">
+        <div>
+          <h3>${t('home.due')}</h3>
+          <p class="muted small">${t('settings.dueBoxHint')}</p>
+        </div>
+        ${segmented('dueBox', t('home.due'), Object.fromEntries(INFO_MODES.map((m) => [m, t(`infoMode.${m}`)])))}
       </div>`,
   ].filter(Boolean).join('');
   const backup = [
@@ -753,6 +1102,10 @@ document.addEventListener('change', (ev) => {
     saveSettings({ infoBox: value });
     infoCollapsed = defaultInfoCollapsed();
     toast(t('toast.infoMode', { mode: t(`infoMode.${value}`) }));
+  } else if (name === 'dueBox' && INFO_MODES.includes(value)) {
+    saveSettings({ dueBox: value });
+    dueCollapsed = defaultDueCollapsed();
+    toast(t('toast.dueMode', { mode: t(`infoMode.${value}`) }));
   } else if (name === 'language' && LANGUAGES[value]) {
     setLanguage(value);
     saveSettings({ language: value });
@@ -767,12 +1120,17 @@ const carTitle = (car) => `${esc(car.make)} <span class="car-model">${esc(car.mo
 function carCard(car) {
   const entries = entriesFor(car.id);
   const last = entries[0];
-  const cover = car.photos[0];
+  const states = remindersFor(car.id);
+  const next = states[0];
+  const perKm = costPerKm([car]);
   const sub = [car.year, car.plate].filter(Boolean).map(esc).join(' · ');
-  const carName = `${esc(car.make)} ${esc(car.model)}`;
+  const name = esc(carName(car));
+  const foot = next
+    ? carTimeline(states)
+    : `<p class="muted">${last ? `${t('card.last', { title: esc(last.title) })} · <span class="nowrap">${fmtDate(last.date)}</span>` : t('card.noEntries')}</p>`;
   return `
     <article class="card car-card">
-      <div class="car-media">${cover ? `<img data-file="${esc(carFile(car, cover))}" data-thumb="640x360" alt="">` : icon('car')}</div>
+      <div class="car-media">${carMedia(car, '640x360')}</div>
       <div class="car-card-body">
         <div class="car-card-title">
           <div>
@@ -780,120 +1138,198 @@ function carCard(car) {
             <p class="muted small">${sub || '&nbsp;'}</p>
           </div>
           <div class="card-actions">
-            <button class="icon-btn quick-add" data-action="show-docs" data-id="${esc(car.id)}" title="${t('docs.show')}" aria-label="${t('docs.showFor', { car: carName })}">${icon('idCard')}</button>
-            <button class="icon-btn quick-add" data-action="add-entry" data-id="${esc(car.id)}" title="${t('card.addEntry')}" aria-label="${t('card.addEntryFor', { car: carName })}">${icon('wrench')}</button>
+            <button class="icon-btn quick-add" data-action="show-docs" data-id="${esc(car.id)}" title="${t('docs.show')}" aria-label="${t('docs.showFor', { car: name })}">${icon('idCard')}</button>
+            <button class="btn primary sm-btn" data-action="add-entry" data-id="${esc(car.id)}" aria-label="${t('card.addEntryFor', { car: name })}">${icon('plus')}<span>${t('btn.entry')}</span></button>
           </div>
         </div>
         <dl class="stats">
-          <div><dt>${t('stats.km')}</dt><dd>${km(car.mileage)}</dd></div>
-          <div><dt>${t('stats.entries')}</dt><dd>${entries.length}</dd></div>
-          <div><dt>${t('stats.cost')}</dt><dd>${money.format(sum(entries))}</dd></div>
+          <div><dt>${t('stats.km')}</dt><dd>${car.mileage ? fmtNum(car.mileage) : '–'}</dd></div>
+          <div><dt>${thisYear()} · ${esc(currencySymbol())}</dt><dd>${fmtNum(Math.round(costThisYear(entries)))}</dd></div>
+          <div><dt>${t('stats.perKm')}</dt><dd>${perKm === null ? '–' : fmtNum(perKm, 2)}</dd></div>
         </dl>
-        <p class="card-foot muted">${last ? `${t('card.last', { title: esc(last.title) })} · <span class="nowrap">${fmtDate(last.date)}</span>` : t('card.noEntries')}</p>
+        <div class="card-foot">${foot}</div>
       </div>
     </article>`;
 }
 
+// Car page: sidebar (photo, actions, vehicle data, photos, documents) and the
+// main column (key figures, reminders by due date, history).
 function renderCar(car) {
   const entries = entriesFor(car.id);
+  const history = historyFor(car.id);
   const photos = car.photos;
-  const year = String(new Date().getFullYear());
-  const lastService = entries.find((e) => e.type === 'service');
-  const sub = [car.year, car.plate].filter(Boolean).map(esc).join(' · ');
-  const tile = (label, value) => `<div class="card tile"><span>${label}</span><strong>${value}</strong></div>`;
+  const docs = documentsFor(car.id);
   const id = esc(car.id);
+  const perKm = costPerKm([car]);
+  const sub = [car.year, car.plate].filter(Boolean).map(esc).join(' · ');
+  const tile = (label, value, extra = '') =>
+    `<div class="card tile"><div><span>${label}</span><strong>${value}</strong></div>${extra}</div>`;
 
   $('#app').innerHTML = `
     <a href="#/" class="back">${icon('back')}${t('nav.back')}</a>
-    <section class="hero">
-      <div class="hero-title">
-        <div class="avatar lg">${photos[0] ? `<img data-file="${esc(carFile(car, photos[0]))}" data-thumb="300x225" alt="">` : icon('car')}</div>
-        <div>
-          <h1>${carTitle(car)}</h1>
-          ${sub ? `<p class="muted">${sub}</p>` : ''}
-        </div>
-      </div>
-      <div class="hero-actions">
-        <button class="icon-btn" data-action="edit-car" data-id="${id}" title="${t('car.edit')}" aria-label="${t('car.edit')}">${icon('pencil')}</button>
-        <button class="icon-btn danger" data-action="delete-car" data-id="${id}" title="${t('car.delete')}" aria-label="${t('car.delete')}">${icon('trash')}</button>
-        <button class="btn primary" data-action="add-entry" data-id="${id}">${icon('plus')}${t('btn.entry')}</button>
-      </div>
-    </section>
-    <div class="tiles">
-      ${tile(t('tile.mileage'), km(car.mileage))}
-      ${tile(t('tile.totalCost'), money.format(sum(entries)))}
-      ${tile(t('tile.costYear', { year }), money.format(sum(entries.filter((e) => e.date.startsWith(year)))))}
-      ${tile(t('tile.lastService'), lastService ? fmtDate(lastService.date) : '–')}
-    </div>
-
-    <div class="car-overview">
-      <section>
-        <div class="section-head"><h2>${t('photos.title')}</h2>${photos.length ? `<span class="muted small">${photos.length}</span>` : ''}</div>
-        <div class="photo-grid">
-          ${photos.map((name, i) => `
-            <div class="thumb">
-              <button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="${i}" aria-label="${t('photos.view', { n: i + 1 })}"><img data-file="${esc(carFile(car, name))}" data-thumb="300x225" alt=""></button>
-              ${i === 0 ? `<span class="cover-badge">${t('photos.cover')}</span>` : ''}
-              <div class="thumb-actions">
-                ${i > 0 ? `<button class="icon-btn sm" data-action="cover-photo" data-id="${id}" data-photo="${esc(name)}" title="${t('photos.makeCover')}" aria-label="${t('photos.makeCover')}">${icon('star')}</button>` : ''}
-                <button class="icon-btn sm" data-action="delete-photo" data-id="${id}" data-photo="${esc(name)}" title="${t('photos.delete')}" aria-label="${t('photos.delete')}">${icon('trash')}</button>
-              </div>
-            </div>`).join('')}
-          <label class="thumb add">${icon('image')}<span>${t('photos.add')}</span>
-            <input type="file" multiple accept="${serverConfig.fileTypes.photos.join(',')}" data-upload="car-photos" data-id="${id}" hidden>
-          </label>
-        </div>
-      </section>
-      <div class="car-side">
-        ${infoBox(car)}
-        <section>
-          <div class="section-head">
-            <h2>${t('type.documents')}</h2>
-            <button class="icon-btn sm push-right" data-action="add-document" data-id="${id}" title="${t('docs.add')}" aria-label="${t('docs.add')}">${icon('plus')}</button>
+    <div class="car-layout">
+      <aside class="card car-side">
+        <div class="car-side-media">${photos[0]
+          ? `<button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="0" aria-label="${t('photos.view', { n: 1 })}"><img data-file="${esc(carFile(car, photos[0]))}" data-thumb="640x360" alt=""></button>`
+          : carMedia(car)}</div>
+        <div class="car-side-body">
+          <div>
+            <h1>${carTitle(car)}</h1>
+            ${sub ? `<p class="muted">${sub}</p>` : ''}
           </div>
-          <div class="card docs-card">${docGrid(car)}</div>
-        </section>
-      </div>
-    </div>
-
-    <div class="section-head"><h2>${t('history.title')}</h2>${entries.length ? `<span class="muted small">${entries.length}</span>` : ''}</div>
-    ${entries.length ? `
-      <div class="toolbar">
-        <div class="chips">
-          ${['all', ...Object.keys(TYPES)].map((type) => `
-            <button class="chip" data-action="filter" data-type="${type}" aria-pressed="${filter.type === type}">${type === 'all' ? t('filter.all') : typeLabel(type)}</button>`).join('')}
+          <div class="car-side-actions">
+            <button class="btn primary" data-action="add-entry" data-id="${id}">${icon('plus')}${t('btn.entry')}</button>
+            <button class="icon-btn outlined" data-action="edit-car" data-id="${id}" title="${t('car.edit')}" aria-label="${t('car.edit')}">${icon('pencil')}</button>
+            <div class="menu-wrap">
+              <button class="icon-btn outlined" data-action="toggle-menu" aria-haspopup="true" aria-expanded="false" title="${t('car.more')}" aria-label="${t('car.more')}">${icon('more')}</button>
+              <div class="menu" hidden>
+                <button data-action="edit-info" data-id="${id}">${icon('idCard')}${t('info.edit')}</button>
+                <button data-action="add-reminder" data-id="${id}">${icon('plus')}${t('rem.add')}</button>
+                <button class="danger" data-action="delete-car" data-id="${id}">${icon('trash')}${t('car.delete')}</button>
+              </div>
+            </div>
+          </div>
+          ${infoBox(car)}
+          <section class="side-section">
+            <h3 class="side-head">${t('photos.title')}${photos.length ? ` · ${photos.length}` : ''}</h3>
+            <div class="photo-grid">
+              ${photos.map((name, i) => `
+                <div class="thumb">
+                  <button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="${i}" aria-label="${t('photos.view', { n: i + 1 })}"><img data-file="${esc(carFile(car, name))}" data-thumb="300x225" alt=""></button>
+                  <div class="thumb-actions">
+                    ${i > 0 ? `<button class="icon-btn sm" data-action="cover-photo" data-id="${id}" data-photo="${esc(name)}" title="${t('photos.makeCover')}" aria-label="${t('photos.makeCover')}">${icon('star')}</button>` : ''}
+                    <button class="icon-btn sm" data-action="delete-photo" data-id="${id}" data-photo="${esc(name)}" title="${t('photos.delete')}" aria-label="${t('photos.delete')}">${icon('trash')}</button>
+                  </div>
+                </div>`).join('')}
+              <label class="thumb add" title="${t('photos.add')}">${icon('plus')}<span class="sr-only">${t('photos.add')}</span>
+                <input type="file" multiple accept="${serverConfig.fileTypes.photos.join(',')}" data-upload="car-photos" data-id="${id}" hidden>
+              </label>
+            </div>
+          </section>
+          <section class="side-section">
+            <h3 class="side-head">${t('docs.title')}${docs.length ? ` · ${docs.length}` : ''}
+              <button class="link-btn accent push-right" data-action="add-document" data-id="${id}">${icon('plus')}${t('docs.addShort')}</button>
+            </h3>
+            ${docList(car)}
+          </section>
+          ${history.length ? `<button class="link-btn" data-action="print-history" data-id="${id}">${icon('printer')}${t('btn.pdf')}</button>` : ''}
         </div>
-        <label class="search">${icon('search')}<input type="search" id="search" placeholder="${t('search.placeholder')}" value="${esc(filter.q)}" aria-label="${t('search.aria')}"></label>
-      </div>` : ''}
-    <div id="entries"></div>`;
+      </aside>
 
-  $('#search')?.addEventListener('input', (ev) => {
-    filter.q = ev.target.value;
-    renderEntries(car);
-  });
+      <div class="car-main">
+        <div class="tiles">
+          ${tile(t('stats.km'), car.mileage ? fmtNum(car.mileage) : '–')}
+          ${tile(t('tile.costYear', { year: thisYear() }), money0.format(costThisYear(entries)), costSpark(entries))}
+          ${tile(t('stats.perKm'), perKm === null ? '–' : fmtNum(perKm, 2))}
+        </div>
+
+        <div class="section-head">
+          <h2>${t('rem.title')}</h2>
+          <button class="link-btn push-right" data-action="add-reminder" data-id="${id}">${icon('plus')}${t('rem.add')}</button>
+        </div>
+        ${reminderPanel(car)}
+
+        <div class="section-head history-head"><h2>${t('history.title')}</h2></div>
+        ${history.length ? `<div class="filters" role="group" aria-label="${t('filter.aria')}">${filterOptions(history).map(([value, label, n]) => `
+          <button class="tchip${n ? '' : ' none'}" data-action="filter" data-type="${value}" aria-pressed="${filter.type === value}">
+            ${value === 'all' ? '' : `<span class="dot" data-color="${TYPES[value].color}"></span>`}${esc(label)}<span class="tchip-n">${n}</span>
+          </button>`).join('')}</div>` : ''}
+        <div id="entries"></div>
+      </div>
+    </div>`;
+
   renderEntries(car);
 }
 
-// Documents of a car as thumbnails (images) or file tiles (PDF).
-function docGrid(car) {
-  const docs = documentsFor(car.id);
-  if (!docs.length) {
-    return `
-      <div class="docs-empty">
-        <p class="muted small">${t('docs.emptyText')}</p>
-        <button class="btn ghost file-btn" data-action="add-document" data-id="${esc(car.id)}">${icon('plus')}${t('docs.add')}</button>
-      </div>`;
+// History filter: all and every entry type, with counts
+function filterOptions(entries) {
+  if (filter.type !== 'all' && !ENTRY_TYPES.includes(filter.type)) filter.type = 'all';
+  return [
+    ['all', t('filter.all'), entries.length],
+    ...ENTRY_TYPES.map((type) => [type, typeLabel(type), entries.filter((e) => e.type === type).length]),
+  ];
+}
+
+// Mini bar chart of this year's costs per month (in the cost tile)
+function costSpark(entries) {
+  const year = thisYear();
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const key = `${year}-${String(i + 1).padStart(2, '0')}`;
+    return { key, total: sum(entries.filter((e) => e.date.startsWith(key))) };
+  });
+  const max = Math.max(...months.map((m) => m.total));
+  if (!max) return '';
+  const label = (m) => `${asDate(`${m.key}-01`).toLocaleDateString(locale(), { month: 'long' })}: ${money.format(m.total)}`;
+  return `
+    <div class="spark" role="img" aria-label="${esc(months.filter((m) => m.total).map(label).join(', '))}">
+      ${months.map((m) => `<span class="${m.total === max ? 'peak' : ''}" title="${esc(label(m))}" style="height:${m.total ? Math.max(10, m.total / max * 100) : 0}%"></span>`).join('')}
+    </div>`;
+}
+
+const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// Interval only ("every 15'000 km", "yearly") – the due date is shown by the group
+function reminderInterval(r) {
+  if (r.intervalKm) return t('rem.everyKm', { km: km(r.intervalKm) });
+  if (r.intervalMonths === 12) return t('rem.yearlyPlain');
+  return r.intervalMonths ? tn('rem.everyMonths', r.intervalMonths) : '';
+}
+
+// All reminders of the car, grouped by due date (or mileage); several due on
+// the same day can be logged as done together.
+function reminderPanel(car) {
+  const states = remindersFor(car.id).sort(bySoonest);
+  if (!states.length) return `<div class="card rem-panel"><p class="muted small rem-empty">${t('rem.empty')}</p></div>`;
+  const groups = new Map();
+  for (const s of states) {
+    const when = dueWhen(s);
+    if (!groups.has(when.full)) groups.set(when.full, { when, list: [] });
+    groups.get(when.full).list.push(s);
   }
-  return `<div class="doc-grid">${docs.map(({ entry, name }) => {
-    // Images are labelled with the entry title, PDFs (no preview) with their file name
-    const file = esc(attachmentLabel(entry, name));
-    const label = isImageName(name) ? esc(entry.title) || file : file;
-    return isImageName(name)
-      ? `<button class="doc" data-action="view-doc" data-id="${esc(car.id)}" data-file="${esc(entryFile(entry, name))}" title="${file}" aria-label="${t('att.view', { name: label })}">
-           <img data-file="${esc(entryFile(entry, name))}" data-thumb="300x225" alt=""><span>${label}</span></button>`
-      : `<button class="doc file" data-action="open-file" data-id="${esc(entry.id)}" data-file="${esc(name)}" title="${file}" aria-label="${t('att.view', { name: label })}">
-           <span class="doc-icon">${icon('file')}</span><span>${label}</span></button>`;
-  }).join('')}</div>`;
+  return `<div class="card rem-panel">${[...groups.values()].map(({ when, list }) => `
+    <div class="rem-group" data-level="${list[0].level}">
+      <span class="leaf"><span>${esc(when.leafTop)}</span><strong>${esc(when.leafNum)}</strong></span>
+      <div class="rem-body">
+        <div class="rem-head">
+          <strong class="rem-when">${esc(list[0].level === 'later' ? when.full : `${capitalize(when.rel)} · ${when.day}`)}</strong>
+          ${list.length > 1 ? `<button class="btn ghost sm-btn" data-action="reminders-done" data-ids="${esc(list.map((s) => s.r.id).join(','))}">${list.length === 2 ? t('rem.bothDone') : t('rem.allDone')}</button>` : ''}
+        </div>
+        ${list.map((s) => `
+          <div class="rem-item">
+            <button class="rem-name" data-action="edit-reminder" data-id="${esc(s.r.id)}">${esc(s.r.title)}${reminderInterval(s.r) ? ` <span class="muted">· ${esc(reminderInterval(s.r))}</span>` : ''}</button>
+            <button class="check-btn" data-action="reminder-done" data-id="${esc(s.r.id)}" title="${t('rem.done')}" aria-label="${esc(`${t('rem.done')}: ${s.r.title}`)}">${icon('check')}</button>
+          </div>`).join('')}
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+// Documents of a car: preview (first image, otherwise an icon), name and validity.
+function docList(car) {
+  const docs = documentsFor(car.id);
+  if (!docs.length) return `<p class="muted small">${t('docs.emptyText')}</p>`;
+  return `<ul class="doc-list">${docs.map((doc) => {
+    const image = doc.attachments.find(isImageName);
+    const files = doc.attachments.length;
+    return `
+      <li>
+        <button class="doc-thumb" data-action="view-document" data-id="${esc(doc.id)}" ${files ? '' : 'disabled'} aria-label="${esc(t('att.view', { name: doc.title }))}">
+          ${image ? `<img data-file="${esc(docFile(doc, image))}" data-thumb="300x225" alt="">` : icon(DOC_KIND_ICONS[doc.kind] ?? 'file')}
+        </button>
+        <button class="doc-name" data-action="edit-document" data-id="${esc(doc.id)}">
+          <span>${esc(doc.title)}</span>${docValidity(doc)}
+        </button>
+      </li>`;
+  }).join('')}</ul>`;
+}
+
+// "valid until 03.2031", "expires 31.12.2026" (within 60 days) or "expired 01.01.2026"
+function docValidity(doc) {
+  if (!doc.validUntil) return '';
+  const days = daysUntil(doc.validUntil);
+  if (days < 0) return `<small class="bad">${esc(t('doc.expired', { date: fmtDateNum(doc.validUntil) }))}</small>`;
+  if (days <= UPCOMING_DAYS) return `<small class="warn">${esc(t('doc.expires', { date: fmtDateNum(doc.validUntil) }))}</small>`;
+  const monthYear = asDate(doc.validUntil).toLocaleDateString(locale(), { month: '2-digit', year: 'numeric' });
+  return `<small class="muted">${esc(t('doc.validUntilShort', { date: monthYear }))}</small>`;
 }
 
 function infoBox(car) {
@@ -904,15 +1340,15 @@ function infoBox(car) {
   const collapsed = collapsible && infoCollapsed;
   const id = esc(car.id);
   return `
-    <aside class="infobox-wrap${collapsed ? ' collapsed' : ''}" id="infobox">
-      <div class="section-head">
-        <h2>${t('info.title')}</h2>
+    <section class="side-section infobox-wrap${collapsed ? ' collapsed' : ''}" id="infobox">
+      <div class="side-head">
+        ${t('info.title')}
         <div class="infobox-actions">
           ${rows.length ? `<button class="icon-btn sm" data-action="edit-info" data-id="${id}" title="${t('info.edit')}" aria-label="${t('info.edit')}">${icon('pencil')}</button>` : ''}
           ${collapsible ? `<button class="icon-btn sm info-toggle" data-action="toggle-info" aria-expanded="${!collapsed}" title="${t('info.toggle')}" aria-label="${t('info.toggleAria')}">${icon('chevronDown')}</button>` : ''}
         </div>
       </div>
-      <div class="card infobox">
+      <div class="infobox">
       ${rows.length
         ? `<dl class="info-list">${rows.map((f) => `
             <div${f.pinned ? ' class="pinned"' : ''}><dt>${fieldName(f)}</dt><dd>${f.format ? f.format(info[f.key]) : esc(info[f.key])}</dd></div>`).join('')}
@@ -923,15 +1359,12 @@ function infoBox(car) {
              <button class="btn ghost file-btn" data-action="edit-info" data-id="${id}">${icon('plus')}${t('info.add')}</button>
            </div>`}
       </div>
-    </aside>`;
+    </section>`;
 }
 
 function renderEntries(car) {
-  const all = entriesFor(car.id);
-  const q = filter.q.trim().toLowerCase();
-  const list = all.filter((e) =>
-    (filter.type === 'all' || e.type === filter.type) &&
-    (!q || [e.title, e.notes, e.shop].join(' ').toLowerCase().includes(q)));
+  const all = historyFor(car.id);
+  const list = all.filter((e) => filter.type === 'all' || e.type === filter.type);
 
   let html;
   if (!all.length) {
@@ -940,48 +1373,46 @@ function renderEntries(car) {
   } else if (!list.length) {
     html = `<p class="muted center">${t('entries.noMatch')}</p>`;
   } else {
-    let lastYear = null;
-    html = `<ul class="timeline">${list.map((e) => {
-      const y = e.date.slice(0, 4);
-      const header = y !== lastYear ? `<li class="year">${esc(y)}</li>` : '';
-      lastYear = y;
-      return header + entryItem(e);
-    }).join('')}</ul>`;
+    html = `<ul class="history">${list.map(entryItem).join('')}</ul>`;
   }
   $('#entries').innerHTML = html;
   hydrate();
 }
 
-function attachmentItem(entry, name) {
-  const label = esc(attachmentLabel(entry, name));
-  if (isImageName(name)) {
-    return `<button class="att" data-action="view-attachment" data-id="${esc(entry.id)}" data-file="${esc(name)}" title="${label}" aria-label="${t('att.view', { name: label })}"><img data-file="${esc(entryFile(entry, name))}" data-thumb="128x128" alt=""></button>`;
-  }
-  return `<button class="att file" data-action="open-file" data-id="${esc(entry.id)}" data-file="${esc(name)}" title="${label}">${icon('file')}<span>${label}</span></button>`;
+// Receipt as a chip: "PDF Rechnung_Garage_Meier.pdf"
+function fileChip(entry, name) {
+  const label = attachmentLabel(entry, name);
+  const ext = (label.match(/\.([a-z0-9]+)$/i)?.[1] ?? 'file').toUpperCase().replace('JPEG', 'JPG');
+  return `<button class="file-chip" data-action="view-file" data-id="${esc(entry.id)}" data-file="${esc(name)}" title="${esc(label)}">
+    <span class="file-ext" data-ext="${esc(ext)}">${esc(ext)}</span><span class="file-name">${esc(label)}</span></button>`;
 }
 
+// Compact row with the receipts; a click shows the notes and the actions.
 function entryItem(e) {
   const color = (TYPES[e.type] ?? TYPES.other).color;
   const id = esc(e.id);
+  const open = openEntries.has(e.id);
+  const files = e.attachments.length;
+  const meta = [typeLabel(e.type), e.shop].filter(Boolean).map(esc).join(' · ');
+  // Dates of the current year without the year
+  const date = e.date.startsWith(thisYear()) ? fmtDayMonth(e.date) : fmtDateNum(e.date);
   return `
-    <li class="entry" data-color="${color}">
-      <div class="entry-dot"></div>
-      <div class="card entry-body">
-        <div class="entry-head">
-          <span class="badge" data-color="${color}">${typeLabel(e.type)}</span>
-          <time datetime="${esc(e.date)}">${fmtDate(e.date)}</time>
-          ${e.mileage ? `<span class="muted">${km(e.mileage)}</span>` : ''}
-          <span class="entry-cost">${e.cost ? money.format(e.cost) : ''}</span>
-        </div>
-        <h4>${esc(e.title)}</h4>
-        ${e.shop ? `<p class="muted small">${icon('pin')}${esc(e.shop)}</p>` : ''}
-        ${e.notes ? `<p class="entry-notes">${esc(e.notes)}</p>` : ''}
-        ${e.attachments.length ? `<div class="attachments">${e.attachments.map((name) => attachmentItem(e, name)).join('')}</div>` : ''}
-        <div class="entry-actions">
-          <button class="icon-btn sm" data-action="edit-entry" data-id="${id}" title="${t('btn.edit')}" aria-label="${t('btn.edit')}">${icon('pencil')}</button>
-          <button class="icon-btn sm danger" data-action="delete-entry" data-id="${id}" title="${t('btn.delete')}" aria-label="${t('btn.delete')}">${icon('trash')}</button>
-        </div>
-      </div>
+    <li class="entry${open ? ' open' : ''}" id="entry-${id}" data-color="${color}">
+      <button class="entry-line" data-action="toggle-entry" data-id="${id}" aria-expanded="${open}">
+        <time datetime="${esc(e.date)}">${date}</time>
+        <span class="entry-main"><strong>${esc(e.title)}</strong><span class="muted">${meta}${files ? ` · <span class="nowrap">${icon('paperclip')} ${files}</span>` : ''}</span></span>
+        <span class="entry-km muted">${e.mileage ? km(e.mileage) : ''}</span>
+        <span class="entry-cost">${e.cost ? money.format(e.cost) : ''}</span>
+      </button>
+      ${files ? `<div class="file-chips">${e.attachments.map((name) => fileChip(e, name)).join('')}</div>` : ''}
+      ${open ? `
+        <div class="entry-detail">
+          ${e.notes ? `<p class="entry-notes">${esc(e.notes)}</p>` : ''}
+          <div class="entry-actions">
+            <button class="btn ghost sm-btn" data-action="edit-entry" data-id="${id}">${icon('pencil')}${t('btn.edit')}</button>
+            <button class="icon-btn sm danger" data-action="delete-entry" data-id="${id}" title="${t('btn.delete')}" aria-label="${t('btn.delete')}">${icon('trash')}</button>
+          </div>
+        </div>` : ''}
     </li>`;
 }
 
@@ -998,6 +1429,12 @@ const userForm = $('#userForm');
 const passwordDialog = $('#passwordDialog');
 const docsDialog = $('#docsDialog');
 const passwordForm = $('#passwordForm');
+const reminderDialog = $('#reminderDialog');
+const reminderForm = $('#reminderForm');
+const docDialog = $('#docDialog');
+const docForm = $('#docForm');
+const quickDialog = $('#quickDialog');
+const quickForm = $('#quickForm');
 const lightbox = $('#lightbox');
 
 function showDialog(dialog) {
@@ -1006,9 +1443,9 @@ function showDialog(dialog) {
 }
 
 async function withBusy(form, fn) {
-  const btn = form.querySelector('[type="submit"]');
+  const buttons = form.querySelectorAll('[type="submit"]');
   const errorEl = form.querySelector('.form-error');
-  btn.disabled = true;
+  buttons.forEach((b) => { b.disabled = true; });
   if (errorEl) errorEl.hidden = true;
   try {
     await fn();
@@ -1022,7 +1459,7 @@ async function withBusy(form, fn) {
       alert(message);
     }
   } finally {
-    btn.disabled = false;
+    buttons.forEach((b) => { b.disabled = false; });
   }
 }
 
@@ -1069,28 +1506,44 @@ carForm.addEventListener('submit', (ev) => {
 // Attachments in the entry dialog: keep/remove existing ones, queue new ones.
 let draft = { entry: null, keep: [], add: [] };
 
-function renderDraft() {
+// Also used for the files of a document (d = docDraft).
+function renderDraft(d = draft, el = $('#attEditor'), pathOf = entryFile) {
   const item = (media, name, list, i) => `
     <div class="draft-item">${media}<span>${esc(name)}</span>
       <button type="button" class="icon-btn sm" data-remove="${list}" data-index="${i}" aria-label="${t('att.remove', { name: esc(name) })}">${icon('x')}</button>
     </div>`;
-  $('#attEditor').innerHTML = [
-    ...draft.keep.map((name, i) => item(
-      isImageName(name) ? `<img data-file="${esc(entryFile(draft.entry, name))}" data-thumb="128x128" alt="">` : icon('file'),
-      attachmentLabel(draft.entry, name), 'keep', i)),
-    ...draft.add.map((d, i) => item(d.url ? `<img src="${d.url}" alt="">` : icon('file'), d.file.name, 'add', i)),
+  el.innerHTML = [
+    ...d.keep.map((name, i) => item(
+      isImageName(name) ? `<img data-file="${esc(pathOf(d.entry, name))}" data-thumb="128x128" alt="">` : icon('file'),
+      attachmentLabel(d.entry, name), 'keep', i)),
+    ...d.add.map((a, i) => item(a.url ? `<img src="${a.url}" alt="">` : icon('file'), a.file.name, 'add', i)),
   ].join('');
   hydrate();
 }
 
-function clearDraft() {
-  draft.add.forEach((d) => d.url && URL.revokeObjectURL(d.url));
-  draft = { entry: null, keep: [], add: [] };
+// Queues files of an allowed type for uploading.
+function queueFiles(d, files) {
+  for (const file of files) {
+    try {
+      checkFileType(file, serverConfig.fileTypes.attachments);
+    } catch (err) {
+      toast(err.message);
+      continue;
+    }
+    d.add.push({ file, url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null });
+  }
 }
 
-function openEntryDialog(entry) {
+function clearDraft() {
+  draft.add.forEach((d) => d.url && URL.revokeObjectURL(d.url));
+  draft = { entry: null, keep: [], add: [], reminder: null };
+}
+
+// reminder: the reminder state this entry completes ("Done" on a due card)
+function openEntryDialog(entry, reminder = null) {
   const car = carById(entry.car);
   const f = entryForm.elements;
+  const isNew = !entry.id;
   entryForm.reset();
   f.namedItem('id').value = entry.id ?? '';
   f.namedItem('car').value = car.id;
@@ -1101,25 +1554,161 @@ function openEntryDialog(entry) {
   for (const key of ['title', 'shop', 'notes']) f.namedItem(key).value = entry[key] ?? '';
   $('#currencySymbol').textContent = currencySymbol();
   clearDraft();
-  draft.entry = entry.id ? entry : null;
+  draft.entry = isNew ? null : entry;
   draft.keep = [...(entry.attachments ?? [])];
+  draft.reminder = reminder;
   renderDraft();
-  $('#entryDialogTitle').textContent = entry.id ? t('entry.edit') : t('entry.new', { car: `${car.make} ${car.model}` });
+  // Templates and the reminder for the next time only when adding an entry.
+  // Several completed reminders each keep their own interval (no reminder box).
+  const several = Array.isArray(reminder);
+  $('#tplField').hidden = !isNew;
+  $('#remindBox').hidden = !isNew || several;
+  $('#saveNext').hidden = !isNew || !!reminder;
+  renderTemplates();
+  const r = several ? null : reminder?.r;
+  setRemind(r ? { km: r.intervalKm, months: r.intervalMonths || (r.virtual ? 24 : 0) } : null);
+  $('#recentShops').innerHTML = recentShops();
+  $('#entryDialogTitle').innerHTML = isNew ? t('entry.new', { car: `<span class="dim">${esc(carName(car))}</span>` }) : esc(t('entry.edit'));
+  updateEntryHints();
   showDialog(entryDialog);
 }
 
-$('#attInput').addEventListener('change', (ev) => {
-  for (const file of ev.target.files) {
-    try {
-      checkFileType(file, serverConfig.fileTypes.attachments);
-    } catch (err) {
-      toast(err.message);
-      continue;
+// next: { km, months } or null (unchecked)
+function setRemind(next) {
+  const f = entryForm.elements;
+  f.namedItem('remind').checked = !!(next?.km || next?.months);
+  f.namedItem('remindKm').value = next?.km || '';
+  f.namedItem('remindMonths').value = next?.months || '';
+  updateEntryHints();
+}
+
+function renderTemplates(active = '') {
+  const chip = (key, label) => `<button type="button" class="chip" data-tpl="${key}" aria-pressed="${key === active}">${esc(label)}</button>`;
+  $('#tplChips').innerHTML = [
+    ...TEMPLATES.map((tpl) => chip(tpl.key, t(`tpl.${tpl.key}`))),
+    ...settings.templates.map((tpl, i) => `
+      <span class="tpl-own">${chip(`own:${i}`, tpl.title)}<button type="button" class="tpl-x" data-tpl-remove="${i}" aria-label="${esc(t('tpl.remove', { title: tpl.title }))}">${icon('x')}</button></span>`),
+    `<button type="button" class="chip add" data-tpl-add>${icon('plus')}${t('tpl.custom')}</button>`,
+  ].join('');
+}
+
+function templateOf(key) {
+  if (key.startsWith('own:')) return settings.templates[Number(key.slice(4))];
+  const tpl = TEMPLATES.find((x) => x.key === key);
+  return tpl && { ...tpl, title: t(`tpl.${tpl.key}`) };
+}
+
+$('#tplChips').addEventListener('click', (ev) => {
+  const f = entryForm.elements;
+  const use = ev.target.closest('[data-tpl]');
+  const remove = ev.target.closest('[data-tpl-remove]');
+  if (use) {
+    const tpl = templateOf(use.dataset.tpl);
+    if (!tpl) return;
+    f.namedItem('type').value = tpl.type;
+    f.namedItem('title').value = tpl.title;
+    setRemind(tpl.type === 'fuel' ? null : { km: tpl.km, months: tpl.months });
+    renderTemplates(use.dataset.tpl);
+  } else if (remove) {
+    const [removed] = settings.templates.splice(Number(remove.dataset.tplRemove), 1);
+    saveSettings({ templates: settings.templates });
+    renderTemplates();
+    toast(t('tpl.removed', { title: removed.title }));
+  } else if (ev.target.closest('[data-tpl-add]')) {
+    // Saves the current title, type and reminder interval as an own template
+    const title = f.namedItem('title').value.trim();
+    if (!title) {
+      f.namedItem('title').focus();
+      toast(t('tpl.needTitle'));
+      return;
     }
-    draft.add.push({ file, url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null });
+    const remind = f.namedItem('remind').checked;
+    const tpl = { title, type: f.namedItem('type').value, km: remind ? num(f.namedItem('remindKm').value) || 0 : 0, months: remind ? num(f.namedItem('remindMonths').value) || 0 : 0 };
+    saveSettings({ templates: [...settings.templates.filter((x) => x.title !== title), tpl] });
+    renderTemplates(`own:${settings.templates.length - 1}`);
+    toast(t('tpl.saved', { title }));
   }
-  ev.target.value = '';
+});
+
+// Workshops used most recently, as one-click suggestions
+function recentShops() {
+  const shops = [...new Set([...db.entries].sort((a, b) => b.date.localeCompare(a.date)).map((e) => e.shop.trim()).filter(Boolean))].slice(0, 3);
+  return shops.length ? `${t('hint.recentShops')} ${shops.map((s) => `<button type="button" class="link" data-shop="${esc(s)}">${esc(s)}</button>`).join(' · ')}` : '';
+}
+
+$('#recentShops').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('[data-shop]');
+  if (btn) entryForm.elements.namedItem('shop').value = btn.dataset.shop;
+});
+
+// Hints below the fields: last mileage, last cost, when the next reminder would be due
+function updateEntryHints() {
+  const f = entryForm.elements;
+  const car = carById(f.namedItem('car').value);
+  if (!car) return;
+  const others = entriesFor(car.id).filter((e) => e.id !== f.namedItem('id').value);
+  const mileage = Number(f.namedItem('mileage').value) || 0;
+  const lastKm = others.find((e) => e.mileage);
+  $('#mileageHint').innerHTML = lastKm
+    ? `${esc(t('hint.lastKm', { km: km(lastKm.mileage), date: fmtDayMonth(lastKm.date) }))}${mileage > lastKm.mileage ? ` · <span class="good">+${esc(km(mileage - lastKm.mileage))}</span>` : ''}`
+    : '';
+  const title = f.namedItem('title').value.trim().toLowerCase();
+  const lastCost = (title && others.find((e) => e.cost && e.title.toLowerCase().includes(title)))
+    || others.find((e) => e.cost && e.type === f.namedItem('type').value);
+  $('#costHint').textContent = lastCost ? t('hint.lastCost', { amount: money.format(lastCost.cost) }) : '';
+
+  const on = f.namedItem('remind').checked;
+  const kmNext = num(f.namedItem('remindKm').value);
+  const months = num(f.namedItem('remindMonths').value);
+  const date = f.namedItem('date').value;
+  const due = [
+    kmNext && km((mileage || car.mileage || 0) + kmNext),
+    months && date && fmtMonthYear(addMonths(date, months)),
+  ].filter(Boolean);
+  $('#remindBox').classList.toggle('off', !on);
+  $('#remindDue').innerHTML = on && due.length ? `→ ${t('remind.due')} ${due.map((d) => `<strong>${esc(d)}</strong>`).join(' / ')}` : '';
+}
+
+entryForm.addEventListener('input', (ev) => {
+  // Typing an interval switches the reminder on
+  if (['remindKm', 'remindMonths'].includes(ev.target.name) && ev.target.value) entryForm.elements.namedItem('remind').checked = true;
+  if (ev.target.name === 'title') renderTemplates();
+  updateEntryHints();
+});
+entryForm.addEventListener('change', updateEntryHints);
+
+$('#todayBtn').addEventListener('click', () => {
+  entryForm.elements.namedItem('date').value = today();
+  updateEntryHints();
+});
+
+function addDraftFiles(files) {
+  queueFiles(draft, files);
   renderDraft();
+}
+
+$('#attInput').addEventListener('change', (ev) => {
+  addDraftFiles(ev.target.files);
+  ev.target.value = '';
+});
+
+// Drag & drop and pasting (Ctrl+V) files into the entry dialog
+const dropzone = $('#dropzone');
+dropzone.addEventListener('dragover', (ev) => {
+  ev.preventDefault();
+  dropzone.classList.add('over');
+});
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('over'));
+dropzone.addEventListener('drop', (ev) => {
+  ev.preventDefault();
+  dropzone.classList.remove('over');
+  addDraftFiles(ev.dataTransfer.files);
+});
+entryDialog.addEventListener('paste', (ev) => {
+  const files = [...(ev.clipboardData?.files ?? [])];
+  if (!files.length) return;
+  ev.preventDefault();
+  addDraftFiles(files);
 });
 
 $('#attEditor').addEventListener('click', (ev) => {
@@ -1132,8 +1721,60 @@ $('#attEditor').addEventListener('click', (ev) => {
 
 entryDialog.addEventListener('close', clearDraft);
 
+async function bumpMileage(car, mileage) {
+  if (mileage && mileage > (car.mileage || 0)) {
+    upsertLocal('cars', await api('PATCH', rec('cars', car.id), { mileage }));
+  }
+}
+
+// After saving: create/update the reminder for the next time, or remove a
+// completed one. The MFK from the vehicle data is moved forward in the vehicle data.
+async function scheduleReminder(car, entry, next, completed) {
+  const r = completed?.r;
+  if (r?.virtual) {
+    const info = { ...car.info, lastInspection: entry.date };
+    if (next?.months) info.nextInspection = addMonths(entry.date, next.months);
+    else delete info.nextInspection;
+    upsertLocal('cars', await api('PATCH', rec('cars', car.id), { info }));
+    return;
+  }
+  if (!next?.km && !next?.months) {
+    if (r) {
+      await api('DELETE', rec('reminders', r.id));
+      db.reminders = db.reminders.filter((x) => x.id !== r.id);
+    }
+    return;
+  }
+  const same = (x) => x.car === car.id && x.title.trim().toLowerCase() === entry.title.trim().toLowerCase();
+  const target = r ?? db.reminders.find(same);
+  // A completed reminder keeps its name ("Oil change", not "Oil change incl. filter")
+  const data = {
+    title: r?.title ?? entry.title,
+    type: r?.type ?? entry.type,
+    intervalKm: next.km || 0,
+    intervalMonths: next.months || 0,
+    dueKm: next.km ? (entry.mileage || car.mileage || 0) + next.km : 0,
+    dueDate: next.months ? addMonths(entry.date, next.months) : '',
+  };
+  upsertLocal('reminders', target
+    ? await api('PATCH', rec('reminders', target.id), data)
+    : await api('POST', rec('reminders'), { ...data, car: car.id }));
+}
+
+// "Save & add another": keep car, date, mileage and workshop, clear the rest.
+function resetForNext() {
+  const f = entryForm.elements;
+  for (const key of ['title', 'cost', 'notes']) f.namedItem(key).value = '';
+  clearDraft();
+  renderDraft();
+  renderTemplates();
+  setRemind(null);
+  f.namedItem('title').focus();
+}
+
 entryForm.addEventListener('submit', (ev) => {
   ev.preventDefault();
+  const another = ev.submitter?.id === 'saveNext';
   withBusy(entryForm, async () => {
     const f = Object.fromEntries(new FormData(entryForm));
     const existing = entryById(f.id);
@@ -1160,12 +1801,19 @@ entryForm.addEventListener('submit', (ev) => {
     upsertLocal('entries', entry);
     removed.forEach((name) => forgetFiles(entryFile(entry, name)));
 
-    const car = carById(f.car);
-    if (data.mileage && data.mileage > (car.mileage || 0)) {
-      upsertLocal('cars', await api('PATCH', rec('cars', car.id), { mileage: data.mileage }));
+    await bumpMileage(carById(f.car), data.mileage);
+    if (Array.isArray(draft.reminder)) {
+      for (const s of draft.reminder) {
+        const next = { km: s.r.intervalKm, months: s.r.intervalMonths || (s.r.virtual ? 24 : 0) };
+        await scheduleReminder(carById(f.car), entry, next, s);
+      }
+    } else if (!existing) {
+      const next = f.remind ? { km: num(f.remindKm), months: num(f.remindMonths) } : null;
+      await scheduleReminder(carById(f.car), entry, next, draft.reminder);
     }
 
-    entryDialog.close();
+    if (another) resetForNext();
+    else entryDialog.close();
     route();
     toast(existing ? t('toast.entryUpdated') : t('toast.entrySaved'));
   });
@@ -1206,6 +1854,377 @@ infoForm.addEventListener('submit', (ev) => {
     route();
     toast(t('toast.infoSaved'));
   });
+});
+
+/* ---------- Reminders dialog ---------- */
+
+function openReminderDialog(carId, r = null) {
+  const car = carById(carId);
+  const f = reminderForm.elements;
+  reminderForm.reset();
+  f.namedItem('id').value = r?.id ?? '';
+  f.namedItem('car').value = car.id;
+  f.namedItem('title').value = r?.title ?? '';
+  f.namedItem('type').value = r?.type ?? 'service';
+  for (const key of ['intervalKm', 'intervalMonths', 'dueKm']) f.namedItem(key).value = r?.[key] || '';
+  f.namedItem('dueDate').value = r?.dueDate ?? '';
+  $('#reminderDialogTitle').innerHTML = r ? esc(t('rem.edit')) : t('rem.new', { car: `<span class="dim">${esc(carName(car))}</span>` });
+  $('#reminderDelete').hidden = !r;
+  $('#reminderDone').hidden = !r;
+  showDialog(reminderDialog);
+}
+
+reminderForm.addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  withBusy(reminderForm, async () => {
+    const f = Object.fromEntries(new FormData(reminderForm));
+    const car = carById(f.car);
+    const intervalKm = num(f.intervalKm) || 0;
+    const intervalMonths = num(f.intervalMonths) || 0;
+    // Empty due values are calculated from the interval and today's state
+    const data = {
+      title: f.title.trim(),
+      type: f.type,
+      intervalKm,
+      intervalMonths,
+      dueKm: num(f.dueKm) || (intervalKm ? (car.mileage || 0) + intervalKm : 0),
+      dueDate: f.dueDate || (intervalMonths ? addMonths(today(), intervalMonths) : ''),
+    };
+    if (!data.dueKm && !data.dueDate) throw new Error(t('rem.needDue'));
+    upsertLocal('reminders', f.id
+      ? await api('PATCH', rec('reminders', f.id), data)
+      : await api('POST', rec('reminders'), { ...data, car: car.id }));
+    reminderDialog.close();
+    route();
+    toast(t('toast.reminderSaved'));
+  });
+});
+
+$('#reminderDelete').addEventListener('click', () => {
+  const r = reminderById(reminderForm.elements.namedItem('id').value);
+  if (!r || !confirm(t('confirm.deleteReminder', { title: r.title }))) return;
+  runAction(async () => {
+    await api('DELETE', rec('reminders', r.id));
+    db.reminders = db.reminders.filter((x) => x.id !== r.id);
+    reminderDialog.close();
+    route();
+    toast(t('toast.reminderDeleted'));
+  });
+});
+
+$('#reminderDone').addEventListener('click', () => {
+  const state = findReminder(reminderForm.elements.namedItem('id').value);
+  reminderDialog.close();
+  if (state) completeReminder(state);
+});
+
+function completeReminder(state) {
+  // Renewing a document = entering its new expiry date
+  const doc = db.documents.find((d) => d.reminder === state.r.id);
+  if (doc) openDocDialog(doc.car, doc);
+  else openEntryDialog({ car: state.car.id, type: state.r.type, title: state.r.title }, state);
+}
+
+/* ---------- Documents dialog ---------- */
+
+let docDraft = { entry: null, keep: [], add: [] };
+const docLabel = (kind) => t(`doc.kind.${kind}`);
+
+function openDocDialog(carId, doc = null) {
+  const f = docForm.elements;
+  docForm.reset();
+  docDraft.add.forEach((a) => a.url && URL.revokeObjectURL(a.url));
+  docDraft = { entry: doc, keep: [...(doc?.attachments ?? [])], add: [] };
+  f.namedItem('id').value = doc?.id ?? '';
+  f.namedItem('car').value = carId;
+  $('#docKinds').innerHTML = DOC_KINDS.map((kind) => `
+    <label><input type="radio" name="kind" value="${kind}"><span>${docLabel(kind)}</span></label>`).join('');
+  f.namedItem('kind').value = doc?.kind ?? 'registration';
+  f.namedItem('title').value = doc?.title ?? docLabel(f.namedItem('kind').value);
+  f.namedItem('validUntil').value = doc?.validUntil ?? '';
+  f.namedItem('remind').checked = doc ? !!doc.reminder : true;
+  $('#docDialogTitle').textContent = doc ? t('doc.edit') : t('docs.add');
+  $('#docDelete').hidden = !doc;
+  renderDraft(docDraft, $('#docFiles'), docFile);
+  updateDocRemind();
+  showDialog(docDialog);
+}
+
+// "Remind 30 days before expiry · 01.12.2026" – only with an expiry date
+function updateDocRemind() {
+  const until = docForm.elements.namedItem('validUntil').value;
+  $('#docRemindBox').hidden = !until;
+  if (until) $('#docRemindText').innerHTML = t('doc.remind', { days: `<strong>${esc(tn('doc.days', DOC_REMIND_DAYS))}</strong>`, date: esc(fmtDateNum(addDays(until, -DOC_REMIND_DAYS))) });
+}
+
+// The name follows the kind until it is changed by hand.
+docForm.addEventListener('change', (ev) => {
+  if (ev.target.name === 'kind') {
+    const title = docForm.elements.namedItem('title');
+    if (!title.value.trim() || DOC_KINDS.some((k) => docLabel(k) === title.value)) title.value = docLabel(ev.target.value);
+  }
+  updateDocRemind();
+});
+docForm.addEventListener('input', updateDocRemind);
+
+$('#docInput').addEventListener('change', (ev) => {
+  queueFiles(docDraft, ev.target.files);
+  ev.target.value = '';
+  renderDraft(docDraft, $('#docFiles'), docFile);
+});
+
+$('#docFiles').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('[data-remove]');
+  if (!btn) return;
+  const [removed] = docDraft[btn.dataset.remove].splice(Number(btn.dataset.index), 1);
+  if (removed?.url) URL.revokeObjectURL(removed.url);
+  renderDraft(docDraft, $('#docFiles'), docFile);
+});
+
+const docDrop = $('#docDrop');
+docDrop.addEventListener('dragover', (ev) => {
+  ev.preventDefault();
+  docDrop.classList.add('over');
+});
+docDrop.addEventListener('dragleave', () => docDrop.classList.remove('over'));
+docDrop.addEventListener('drop', (ev) => {
+  ev.preventDefault();
+  docDrop.classList.remove('over');
+  queueFiles(docDraft, ev.dataTransfer.files);
+  renderDraft(docDraft, $('#docFiles'), docFile);
+});
+docDialog.addEventListener('paste', (ev) => {
+  const files = [...(ev.clipboardData?.files ?? [])];
+  if (!files.length) return;
+  ev.preventDefault();
+  queueFiles(docDraft, files);
+  renderDraft(docDraft, $('#docFiles'), docFile);
+});
+
+// Creates, moves or removes the reminder before the document expires.
+async function syncDocReminder(doc, remind) {
+  const current = doc.reminder && reminderById(doc.reminder);
+  if (remind && doc.validUntil) {
+    const data = { title: t('doc.reminderTitle', { title: doc.title }), type: 'documents', intervalKm: 0, intervalMonths: 0, dueKm: 0, dueDate: addDays(doc.validUntil, -DOC_REMIND_DAYS) };
+    const r = current
+      ? await api('PATCH', rec('reminders', current.id), data)
+      : await api('POST', rec('reminders'), { ...data, car: doc.car });
+    upsertLocal('reminders', r);
+    return r.id === doc.reminder ? doc : api('PATCH', rec('documents', doc.id), { reminder: r.id });
+  }
+  if (current) {
+    await api('DELETE', rec('reminders', current.id));
+    db.reminders = db.reminders.filter((r) => r.id !== current.id);
+  }
+  return doc.reminder ? api('PATCH', rec('documents', doc.id), { reminder: '' }) : doc;
+}
+
+docForm.addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  withBusy(docForm, async () => {
+    const f = Object.fromEntries(new FormData(docForm));
+    const existing = documentById(f.id);
+    const files = await Promise.all(docDraft.add.map((a) => prepareFile(a.file, ATTACHMENT_MAX, serverConfig.fileTypes.attachments)));
+    const removed = (existing?.attachments ?? []).filter((name) => !docDraft.keep.includes(name));
+    const data = { kind: f.kind, title: f.title.trim(), validUntil: f.validUntil };
+    if (removed.length) {
+      data['attachments-'] = removed;
+      data.attachmentNames = Object.fromEntries(Object.entries(existing.attachmentNames ?? {}).filter(([name]) => !removed.includes(name)));
+    }
+    let doc = existing
+      ? await api('PATCH', rec('documents', existing.id), data)
+      : await api('POST', rec('documents'), { ...data, car: f.car });
+    if (files.length) doc = await uploadAttachments(doc, files, 'documents');
+    doc = await syncDocReminder(doc, !!f.remind);
+    upsertLocal('documents', doc);
+    removed.forEach((name) => forgetFiles(docFile(doc, name)));
+    docDialog.close();
+    route();
+    toast(existing ? t('toast.docUpdated') : t('toast.docSaved'));
+  });
+});
+
+$('#docDelete').addEventListener('click', () => {
+  const doc = documentById(docForm.elements.namedItem('id').value);
+  if (!doc || !confirm(t('confirm.deleteDoc', { title: doc.title }))) return;
+  runAction(async () => {
+    if (doc.reminder) {
+      await api('DELETE', rec('reminders', doc.reminder)).catch(() => {});
+      db.reminders = db.reminders.filter((r) => r.id !== doc.reminder);
+    }
+    await api('DELETE', rec('documents', doc.id));
+    db.documents = db.documents.filter((d) => d.id !== doc.id);
+    forgetFiles(`documents/${doc.id}/`);
+    docDialog.close();
+    route();
+    toast(t('toast.docDeleted'));
+  });
+});
+
+/* ---------- Quick entry (phones) ---------- */
+
+let quickPhoto = null;
+
+function openQuickDialog(carId) {
+  const selected = carById(carId) ?? carById(currentCarId) ?? db.cars[0];
+  if (!selected) return;
+  quickForm.reset();
+  $('#quickCars').innerHTML = db.cars.length > 1
+    ? db.cars.map((c) => `
+      <label><input type="radio" name="car" value="${esc(c.id)}" ${c === selected ? 'checked' : ''}><span>${esc(c.model || c.make)}</span></label>`).join('')
+    : `<input type="hidden" name="car" value="${esc(selected.id)}">`;
+  quickForm.elements.namedItem('type').value = 'service';
+  quickForm.elements.namedItem('mileage').value = selected.mileage || '';
+  $('#quickCurrency').textContent = currencySymbol();
+  setQuickPhoto(null);
+  showDialog(quickDialog);
+}
+
+function setQuickPhoto(file) {
+  quickPhoto = file;
+  $('#quickPhotoTile').classList.toggle('done', !!file);
+  $('#quickPhotoLabel').textContent = file ? t('quick.receiptAdded') : t('quick.receipt');
+}
+
+quickForm.addEventListener('change', (ev) => {
+  if (ev.target.name === 'car') quickForm.elements.namedItem('mileage').value = carById(ev.target.value)?.mileage || '';
+  if (ev.target.id === 'quickPhoto' && ev.target.files[0]) {
+    try {
+      checkFileType(ev.target.files[0], serverConfig.fileTypes.attachments);
+      setQuickPhoto(ev.target.files[0]);
+    } catch (err) {
+      toast(err.message);
+    }
+    ev.target.value = '';
+  }
+});
+
+quickForm.addEventListener('click', (ev) => {
+  const step = ev.target.closest('[data-step]');
+  if (!step) return;
+  const input = quickForm.elements.namedItem('mileage');
+  input.value = Math.max(0, (Number(input.value) || 0) + Number(step.dataset.step) * QUICK_KM_STEP);
+});
+
+quickForm.addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  withBusy(quickForm, async () => {
+    const f = Object.fromEntries(new FormData(quickForm));
+    const car = carById(f.car);
+    let entry = await api('POST', rec('entries'), {
+      car: car.id,
+      type: f.type,
+      date: today(),
+      mileage: num(f.mileage),
+      title: f.type === 'fuel' ? t('tpl.fuel') : typeLabel(f.type),
+      cost: num(f.cost),
+    });
+    if (quickPhoto) entry = await uploadAttachments(entry, [await prepareFile(quickPhoto, ATTACHMENT_MAX, serverConfig.fileTypes.attachments)]);
+    upsertLocal('entries', entry);
+    await bumpMileage(car, entry.mileage);
+    quickDialog.close();
+    route();
+    toast(t('toast.entrySaved'));
+  });
+});
+
+/* ---------- Search ---------- */
+
+const searchInput = $('#globalQ');
+const searchResults = $('#searchResults');
+
+function renderSearch() {
+  const q = searchInput.value.trim().toLowerCase();
+  if (!q) {
+    searchResults.hidden = true;
+    return;
+  }
+  const matches = (fields) => fields.join(' ').toLowerCase().includes(q);
+  const cars = db.cars.filter((c) => matches([c.make, c.model, c.plate, c.info?.vin])).map((c) => `
+    <a class="sr-item" href="#/car/${esc(c.id)}"><strong>${carTitle(c)}</strong><span class="muted small">${[c.year, c.plate].filter(Boolean).map(esc).join(' · ')}</span></a>`);
+  const entries = db.entries.filter((e) => matches([e.title, e.shop, e.notes]))
+    .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8).map((e) => `
+    <a class="sr-item" href="#/car/${esc(e.car)}" data-entry="${esc(e.id)}"><strong>${esc(e.title)}</strong>
+      <span class="muted small">${[carName(carById(e.car)), fmtDateNum(e.date), e.cost && money.format(e.cost)].filter(Boolean).map(esc).join(' · ')}</span></a>`);
+  searchResults.innerHTML = [...cars, ...entries].join('') || `<p class="muted small sr-empty">${t('search.noResults')}</p>`;
+  searchResults.hidden = false;
+}
+
+function closeSearch() {
+  searchInput.value = '';
+  searchResults.hidden = true;
+  searchInput.blur();
+  document.body.classList.remove('search-open');
+}
+
+searchInput.addEventListener('input', renderSearch);
+searchInput.addEventListener('focus', renderSearch);
+searchInput.addEventListener('blur', () => { searchResults.hidden = true; });
+searchResults.addEventListener('pointerdown', (ev) => ev.preventDefault()); // keep the focus while clicking a hit
+searchInput.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape') closeSearch();
+  if (ev.key === 'Enter') searchResults.querySelector('.sr-item')?.click();
+});
+
+// A hit opens the car and expands the entry.
+searchResults.addEventListener('click', (ev) => {
+  const item = ev.target.closest('.sr-item');
+  if (!item) return;
+  ev.preventDefault();
+  const entryId = item.dataset.entry;
+  if (entryId) {
+    openEntries.add(entryId);
+    filter.type = 'all';
+  }
+  closeSearch();
+  history.pushState(null, '', item.getAttribute('href'));
+  route();
+  if (entryId) $(`#entry-${CSS.escape(entryId)}`)?.scrollIntoView({ block: 'center' });
+});
+
+document.addEventListener('keydown', (ev) => {
+  const typing = ev.target.closest?.('input, textarea, select, [contenteditable]');
+  if (ev.key === '/' && auth && !typing && !document.querySelector('dialog[open]')) {
+    ev.preventDefault();
+    document.body.classList.add('search-open');
+    searchInput.focus();
+  }
+});
+
+/* ---------- Service history (print / PDF) ---------- */
+
+// Prints a clean history; the browser's "Save as PDF" turns it into a PDF.
+function printHistory(car) {
+  const entries = historyFor(car.id);
+  const info = car.info ?? {};
+  const facts = [
+    [t('car.year'), car.year], [t('car.plate'), car.plate], [t('info.vin'), info.vin],
+    [t('info.stammnummer'), info.stammnummer], [t('tile.mileage'), car.mileage && km(car.mileage)],
+  ].filter(([, value]) => value);
+  $('#printArea')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="printArea">
+      <header>
+        <h1>${esc(carName(car))}</h1>
+        <p>${t('print.title')} · ${esc(t('print.date', { date: fmtDateNum(today()) }))}</p>
+      </header>
+      <dl>${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+      <table>
+        <thead><tr><th>${t('entry.date')}</th><th>${t('entry.title')}</th><th>${t('entry.type')}</th><th>${t('entry.shop')}</th><th class="num">${t('entry.mileage')}</th><th class="num">${t('entry.cost')}</th></tr></thead>
+        <tbody>${entries.map((e) => `
+          <tr><td>${fmtDateNum(e.date)}</td><td>${esc(e.title)}${e.notes ? `<small>${esc(e.notes)}</small>` : ''}</td><td>${typeLabel(e.type)}</td>
+            <td>${esc(e.shop)}</td><td class="num">${e.mileage ? km(e.mileage) : ''}</td><td class="num">${e.cost ? money.format(e.cost) : ''}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="5">${t('print.total')}</td><td class="num">${money.format(sum(entries))}</td></tr></tfoot>
+      </table>
+      <footer>${esc(serverConfig.appName)}</footer>
+    </div>`);
+  document.title = `${serverConfig.appName} – ${carName(car)}`; // suggested PDF file name
+  window.print();
+}
+
+window.addEventListener('afterprint', () => {
+  $('#printArea')?.remove();
+  document.title = serverConfig.appName;
 });
 
 function openPasswordDialog(userId, username) {
@@ -1255,7 +2274,7 @@ userForm.addEventListener('submit', (ev) => {
   });
 });
 
-for (const dialog of [carDialog, entryDialog, infoDialog, userDialog, passwordDialog, docsDialog, lightbox]) {
+for (const dialog of [carDialog, entryDialog, infoDialog, userDialog, passwordDialog, docsDialog, reminderDialog, docDialog, quickDialog, lightbox]) {
   dialog.addEventListener('click', (ev) => {
     if (ev.target === dialog || ev.target.closest('[data-close]')) dialog.close();
   });
@@ -1340,6 +2359,8 @@ document.addEventListener('click', (ev) => {
         await api('DELETE', rec('cars', id));
         db.cars = db.cars.filter((c) => c.id !== id);
         db.entries = db.entries.filter((e) => e.car !== id);
+        db.reminders = db.reminders.filter((r) => r.car !== id);
+        db.documents = db.documents.filter((d) => d.car !== id);
         forgetFiles(`cars/${id}/`);
         location.hash = '#/';
         route();
@@ -1350,6 +2371,13 @@ document.addEventListener('click', (ev) => {
     case 'edit-info':
       openInfoDialog(carById(id));
       break;
+    case 'toggle-due': {
+      dueCollapsed = !dueCollapsed;
+      if (settings.dueBox === 'remember') saveSettings({ dueCollapsed });
+      $('#due').classList.toggle('collapsed', dueCollapsed);
+      el.setAttribute('aria-expanded', !dueCollapsed);
+      break;
+    }
     case 'toggle-info': {
       infoCollapsed = !infoCollapsed;
       if (settings.infoBox === 'remember') saveSettings({ infoCollapsed });
@@ -1386,21 +2414,30 @@ document.addEventListener('click', (ev) => {
       break;
     case 'show-docs': {
       const car = carById(id);
-      $('#docsDialogTitle').textContent = `${t('type.documents')} · ${car.make} ${car.model}`;
-      $('#docsContent').innerHTML = docGrid(car);
+      $('#docsDialogTitle').textContent = `${t('docs.title')} · ${carName(car)}`;
+      $('#docsContent').innerHTML = `${docList(car)}
+        <button class="link-btn accent" data-action="add-document" data-id="${esc(car.id)}">${icon('plus')}${t('docs.addShort')}</button>`;
       showDialog(docsDialog);
       hydrate();
       break;
     }
     case 'add-document':
       if (docsDialog.open) docsDialog.close();
-      openEntryDialog({ car: id, type: 'documents' });
+      openDocDialog(id);
       break;
-    case 'view-doc': {
-      const images = documentsFor(id).filter((d) => isImageName(d.name)).map((d) => entryFile(d.entry, d.name));
-      openLightbox(images, images.indexOf(el.dataset.file));
+    case 'edit-document': {
+      const doc = documentById(id);
+      if (docsDialog.open) docsDialog.close();
+      if (doc) openDocDialog(doc.car, doc);
       break;
     }
+    case 'view-document':
+      runAction(() => viewFiles(documentById(id), docFile));
+      break;
+    case 'view-file':
+      // A file chip of an entry: images in the viewer, PDFs in a new tab
+      runAction(() => viewFiles(entryById(id), entryFile, el.dataset.file));
+      break;
     case 'edit-entry':
       openEntryDialog(entryById(id));
       break;
@@ -1416,23 +2453,67 @@ document.addEventListener('click', (ev) => {
       });
       break;
     }
-    case 'view-attachment': {
-      const entry = entryById(id);
-      const images = entry.attachments.filter(isImageName);
-      openLightbox(images.map((name) => entryFile(entry, name)), images.indexOf(el.dataset.file));
-      break;
-    }
-    case 'open-file':
-      runAction(async () => {
-        const entry = entryById(id);
-        const name = el.dataset.file;
-        openFile(await fileObjectUrl(entryFile(entry, name)), attachmentLabel(entry, name));
-      });
-      break;
     case 'filter':
       filter.type = el.dataset.type;
-      document.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === el));
+      document.querySelectorAll('.tchip').forEach((c) => c.setAttribute('aria-pressed', c === el));
       renderEntries(carById(currentCarId));
+      break;
+    case 'toggle-entry':
+      if (openEntries.has(id)) openEntries.delete(id);
+      else openEntries.add(id);
+      renderEntries(carById(currentCarId));
+      $(`#entry-${CSS.escape(id)} .entry-line`)?.focus();
+      break;
+    case 'toggle-due-group': {
+      const key = el.dataset.key;
+      if (collapsedDue.has(key)) collapsedDue.delete(key);
+      else collapsedDue.add(key);
+      el.setAttribute('aria-expanded', !collapsedDue.has(key));
+      break;
+    }
+    case 'toggle-menu': {
+      const menu = el.nextElementSibling;
+      menu.hidden = !menu.hidden;
+      el.setAttribute('aria-expanded', !menu.hidden);
+      break;
+    }
+    case 'reminders-done': {
+      const states = el.dataset.ids.split(',').map(findReminder).filter(Boolean);
+      if (states.length) {
+        openEntryDialog({ car: states[0].car.id, type: states[0].r.type, title: states.map((s) => s.r.title).join(' + ') }, states);
+      }
+      break;
+    }
+    case 'add-reminder':
+      openReminderDialog(id);
+      break;
+    case 'edit-reminder': {
+      const state = findReminder(id);
+      if (!state) return;
+      // The MFK date comes from the vehicle data
+      if (state.r.virtual) openInfoDialog(state.car);
+      else openReminderDialog(state.car.id, state.r);
+      break;
+    }
+    case 'reminder-done': {
+      const state = findReminder(id);
+      if (state) completeReminder(state);
+      break;
+    }
+    case 'print-history':
+      printHistory(carById(id));
+      break;
+    case 'quick-add':
+      openQuickDialog(currentCarId);
+      break;
+    case 'search-toggle':
+      document.body.classList.toggle('search-open');
+      if (document.body.classList.contains('search-open')) searchInput.focus();
+      break;
+    case 'go-due':
+      if (location.hash && location.hash !== '#/') history.pushState(null, '', '#/');
+      route();
+      $('#due')?.scrollIntoView({ behavior: 'smooth' });
       break;
     case 'export':
       runAction(exportBackup);
@@ -1455,6 +2536,16 @@ document.addEventListener('click', (ev) => {
   }
 });
 
+// Open menus ("…") close on any click outside their button.
+document.addEventListener('click', (ev) => {
+  const toggle = ev.target.closest('[data-action="toggle-menu"]');
+  for (const menu of document.querySelectorAll('.menu:not([hidden])')) {
+    if (toggle && menu === toggle.nextElementSibling) continue;
+    menu.hidden = true;
+    menu.previousElementSibling.setAttribute('aria-expanded', false);
+  }
+});
+
 document.addEventListener('change', async (ev) => {
   const input = ev.target.closest('input[data-upload="car-photos"]');
   if (!input?.files.length) return;
@@ -1473,7 +2564,8 @@ document.addEventListener('change', async (ev) => {
 
 // Format (version 2) is compatible with backups from the former browser-only version.
 async function exportBackup() {
-  const total = db.cars.reduce((n, c) => n + c.photos.length, 0) + db.entries.reduce((n, e) => n + e.attachments.length, 0);
+  const total = db.cars.reduce((n, c) => n + c.photos.length, 0)
+    + [...db.entries, ...db.documents].reduce((n, e) => n + e.attachments.length, 0);
   let done = 0;
   const files = [];
   const addFile = async (path, name) => {
@@ -1499,7 +2591,20 @@ async function exportBackup() {
     });
   }
 
-  const backup = { version: 2, app: 'carmaint', exported: new Date().toISOString(), settings, cars, entries, files };
+  const documents = [];
+  for (const d of db.documents) {
+    const attachments = [];
+    for (const name of d.attachments) attachments.push(await addFile(docFile(d, name), attachmentLabel(d, name)));
+    documents.push({ carId: d.car, kind: d.kind, title: d.title, validUntil: d.validUntil, remind: !!d.reminder, attachments });
+  }
+
+  // Reminders of documents are created again from "remind" on import.
+  const reminders = db.reminders.filter((r) => !db.documents.some((d) => d.reminder === r.id)).map((r) => ({
+    carId: r.car, title: r.title, type: r.type, intervalKm: r.intervalKm || null, intervalMonths: r.intervalMonths || null,
+    dueKm: r.dueKm || null, dueDate: r.dueDate,
+  }));
+
+  const backup = { version: 2, app: 'carmaint', exported: new Date().toISOString(), settings, cars, entries, reminders, documents, files };
   const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -1563,6 +2668,34 @@ async function importBackup(data) {
       const atts = await filesOf(e.attachments, (a) => fileOf(a?.id, a?.name, serverConfig.fileTypes.attachments));
       if (atts.length) await uploadAttachments(entry, atts);
     }
+    // Reminders exist since 0.2 – older backups have none.
+    for (const r of Array.isArray(data.reminders) ? data.reminders : []) {
+      const car = carIds.get(r.carId);
+      if (!car) continue;
+      await api('POST', rec('reminders'), {
+        car,
+        title: str(r.title) || t('import.entryFallback'),
+        type: TYPES[r.type] ? r.type : 'other',
+        intervalKm: num(r.intervalKm),
+        intervalMonths: num(r.intervalMonths),
+        dueKm: num(r.dueKm),
+        dueDate: /^\d{4}-\d{2}-\d{2}$/.test(r.dueDate) ? r.dueDate : '',
+      });
+    }
+    // Documents exist since 0.2 (before, they were entries of type "documents").
+    for (const d of Array.isArray(data.documents) ? data.documents : []) {
+      const car = carIds.get(d.carId);
+      if (!car) continue;
+      let doc = await api('POST', rec('documents'), {
+        car,
+        kind: DOC_KINDS.includes(d.kind) ? d.kind : 'other',
+        title: str(d.title) || t('docs.title'),
+        validUntil: /^\d{4}-\d{2}-\d{2}$/.test(d.validUntil) ? d.validUntil : '',
+      });
+      const atts = await filesOf(d.attachments, (a) => fileOf(a?.id, a?.name, serverConfig.fileTypes.attachments));
+      if (atts.length) doc = await uploadAttachments(doc, atts, 'documents');
+      await syncDocReminder(doc, !!d.remind);
+    }
   } catch (err) {
     // Remove partially imported data; the existing data stays untouched.
     for (const id of created) await api('DELETE', rec('cars', id)).catch(() => {});
@@ -1574,6 +2707,7 @@ async function importBackup(data) {
   if (CURRENCIES[data.settings?.currency]) await saveSettings({ currency: data.settings.currency });
   forgetFiles();
   await loadData();
+  await moveLegacyDocuments(); // backups from before 0.2
   location.hash = '#/';
   route();
   toast(tn('toast.imported', data.cars.length));
@@ -1606,6 +2740,42 @@ $('#themeBtn').addEventListener('click', () => {
   try { localStorage.setItem(THEME_KEY, root.dataset.theme); } catch {}
 });
 
+// Display size: scales the whole page; stored per device (screens differ).
+const ZOOM_KEY = 'carmaint:zoom';
+const ZOOM_STEPS = [80, 90, 100, 110, 125, 140];
+let zoom = 100;
+try { zoom = ZOOM_STEPS.includes(Number(localStorage.getItem(ZOOM_KEY))) ? Number(localStorage.getItem(ZOOM_KEY)) : 100; } catch {}
+
+function setZoom(next) {
+  zoom = next;
+  document.documentElement.style.zoom = zoom === 100 ? '' : zoom / 100;
+  $('#zoomValue').textContent = `${zoom} %`;
+  $('#zoomMenu [data-zoom="-1"]').disabled = zoom === ZOOM_STEPS[0];
+  $('#zoomMenu [data-zoom="1"]').disabled = zoom === ZOOM_STEPS.at(-1);
+  try { localStorage.setItem(ZOOM_KEY, zoom); } catch {}
+}
+
+function toggleZoomMenu(open) {
+  $('#zoomMenu').hidden = !open;
+  $('#zoomBtn').setAttribute('aria-expanded', open);
+}
+
+$('#zoomBtn').addEventListener('click', () => toggleZoomMenu($('#zoomMenu').hidden));
+$('#zoomMenu').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('[data-zoom]');
+  if (!btn) return;
+  const step = Number(btn.dataset.zoom);
+  const i = ZOOM_STEPS.indexOf(zoom);
+  setZoom(step ? ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, i + step))] : 100);
+});
+document.addEventListener('click', (ev) => {
+  if (!ev.target.closest('.zoom-wrap')) toggleZoomMenu(false);
+});
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && !$('#zoomMenu').hidden) toggleZoomMenu(false);
+});
+setZoom(zoom);
+
 // duration 0 = stays visible until the next message
 function toast(msg, duration = 2200) {
   const el = $('#toast');
@@ -1627,6 +2797,8 @@ async function start() {
   setLanguage(initialLanguage());
   // File pickers only offer the allowed types (ALLOWED_FILE_TYPES)
   $('#attInput').accept = serverConfig.fileTypes.attachments.join(',');
+  $('#docInput').accept = serverConfig.fileTypes.attachments.join(',');
+  $('#quickPhoto').accept = serverConfig.fileTypes.attachments.filter((type) => type.startsWith('image/')).join(',') || 'image/jpeg';
   $('#carPhotos').accept = serverConfig.fileTypes.photos.join(',');
   document.title = serverConfig.appName;
   $('#appName').innerHTML = wordmark(serverConfig.appName);
