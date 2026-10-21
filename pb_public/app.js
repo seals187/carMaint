@@ -70,6 +70,9 @@ const ICONS = {
   star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   minus: '<path d="M5 12h14"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
+  user: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
   shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
   more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   textSize: '<path d="M21 14h-5"/><path d="M16 16v-3.5a2.5 2.5 0 0 1 5 0V16"/><path d="M4.5 13h6"/><path d="m3 16 4.5-9 4.5 9"/>',
@@ -187,6 +190,9 @@ const INFO_FIELDS = [
   { group: 'technical', key: 'displacement', unit: () => 'cm³', type: 'number', format: (v) => `${fmtNum(v)} cm³` },
   { group: 'technical', key: 'fuel', options: Object.keys(FUELS), format: (v) => esc(fuelLabel(v)) },
   { group: 'technical', key: 'color', placeholderKey: 'ph.color' },
+  // Tyre sizes; different sizes front/rear as "225/40 R18 / 255/35 R18"
+  { group: 'tires', key: 'tiresSummer', placeholder: '205/55 R16 91V', upper: true, format: mono },
+  { group: 'tires', key: 'tiresWinter', placeholder: '205/55 R16 91H', upper: true, format: mono },
   { group: 'inspection', key: 'lastInspection', type: 'date', format: fmtDate },
   { group: 'inspection', key: 'nextInspection', type: 'date', format: (v) => `${fmtDate(v)}${dueBadge(v)}` },
 ];
@@ -632,9 +638,11 @@ async function saveSettings(next) {
   try {
     const record = await api('PATCH', rec('users', me().id), { settings });
     setAuth({ ...auth, record });
+    return true;
   } catch (err) {
     console.error(err);
     toast(t('err.settings'));
+    return false;
   }
 }
 
@@ -720,6 +728,7 @@ let currentCarId = null;
 let filter = { type: 'all' };
 let infoCollapsed = false;
 let dueCollapsed = false;
+let lastPage = null;
 const openEntries = new Set(); // expanded rows in the history
 
 function route() {
@@ -728,11 +737,12 @@ function route() {
   const car = view === 'car' ? carById(id) : null;
   if (view === 'settings') {
     currentCarId = null;
-    renderSettings();
+    renderSettings(id);
   } else if (car) {
     if (car.id !== currentCarId) {
       filter = { type: 'all' };
-      infoCollapsed = defaultInfoCollapsed();
+      // With an own choice of fields only those are shown at first
+      infoCollapsed = defaultInfoCollapsed() || Array.isArray(car.info?.pinned);
     }
     currentCarId = car.id;
     renderCar(car);
@@ -741,6 +751,10 @@ function route() {
     renderHome();
   }
   renderDuePill();
+  // A different page starts at the top; re-rendering the same page keeps the position
+  const page = view === 'car' && car ? `car/${car.id}` : view === 'settings' ? `settings/${id ?? ''}` : 'home';
+  if (page !== lastPage) window.scrollTo(0, 0);
+  lastPage = page;
   hydrate();
 }
 
@@ -907,56 +921,158 @@ const carMedia = (car, thumb) => (car.photos[0]
 const isDemo = () => !!serverConfig.demo && me()?.username === serverConfig.demo.username;
 const allowed = (option) => !isDemo() || !serverConfig.demo.disabled.includes(option);
 
-function renderSettings() {
-  const display = [
-    allowed('language') && `
-      <div class="setting">
-        <div>
-          <h3>${t('settings.language')}</h3>
-          <p class="muted small">${t('settings.languageHint')}</p>
-        </div>
-        ${segmented('language', t('settings.language'), LANGUAGES)}
-      </div>`,
-    allowed('currency') && `
-      <div class="setting">
-        <div>
-          <h3>${t('settings.currency')}</h3>
-          <p class="muted small">${t('settings.currencyHint')}</p>
-          <p class="muted small" id="currencyExample">${t('settings.example', { value: money.format(1234.5) })}</p>
-        </div>
-        ${segmented('currency', t('settings.currency'), Object.fromEntries(Object.keys(CURRENCIES).map((c) => [c, c])))}
-      </div>`,
-    allowed('infobox') && `
-      <div class="setting">
-        <div>
-          <h3>${t('settings.infoBox')}</h3>
-          <p class="muted small">${t('settings.infoBoxHint')}</p>
-        </div>
-        ${segmented('infoBox', t('settings.infoBox'), Object.fromEntries(INFO_MODES.map((m) => [m, t(`infoMode.${m}`)])))}
-      </div>`,
-    allowed('infobox') && `
-      <div class="setting">
-        <div>
-          <h3>${t('home.due')}</h3>
-          <p class="muted small">${t('settings.dueBoxHint')}</p>
-        </div>
-        ${segmented('dueBox', t('home.due'), Object.fromEntries(INFO_MODES.map((m) => [m, t(`infoMode.${m}`)])))}
-      </div>`,
-  ].filter(Boolean).join('');
+/* ---------- Settings ---------- */
+
+// Sections in the side menu (#/settings/<key>)
+const SETTINGS_SECTIONS = [
+  { key: 'display', icon: 'contrast' },
+  { key: 'notify', icon: 'bell' },
+  { key: 'data', icon: 'database' },
+  { key: 'account', icon: 'user' },
+  { key: 'admin', icon: 'settings', admin: true },
+];
+const NOTIFY_BEFORE = [30, 14, 7, 1, 0];
+const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
+// Notification options of the user with defaults (see pb_hooks/notify.js)
+function notifyOptions() {
+  const n = settings.notify ?? {};
+  return {
+    enabled: !!n.enabled,
+    email: n.email ?? '',
+    hour: Number.isInteger(n.hour) ? n.hour : serverConfig.notify?.hour ?? 7,
+    before: Array.isArray(n.before) ? n.before : [7, 1, 0],
+    frequency: n.frequency ?? 'new',
+    overdue: String(n.overdue ?? '7'),
+    push: { enabled: !!n.push?.enabled, url: n.push?.url ?? '' },
+  };
+}
+
+function notifyFromForm(form) {
+  const f = new FormData(form);
+  return {
+    enabled: !!f.get('enabled'),
+    email: String(f.get('email') ?? '').trim(),
+    hour: Number(f.get('hour')),
+    before: f.getAll('before').map(Number),
+    frequency: f.get('frequency'),
+    overdue: f.get('overdue'),
+    push: { enabled: !!f.get('pushEnabled'), url: String(f.get('pushUrl') ?? '').trim() },
+  };
+}
+
+const settingRow = (title, hint, control) => `
+  <div class="setting">
+    <div>
+      <h3>${title}</h3>
+      ${hint ? `<p class="muted small">${hint}</p>` : ''}
+    </div>
+    ${control}
+  </div>`;
+
+const switchInput = (name, checked, label, disabled = false) =>
+  `<label class="switch" title="${esc(label)}"><input type="checkbox" name="${name}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} aria-label="${esc(label)}"><span></span></label>`;
+
+function displaySection() {
+  const modes = Object.fromEntries(INFO_MODES.map((m) => [m, t(`infoMode.${m}`)]));
+  return `<div class="card settings">${[
+    allowed('language') && settingRow(t('settings.language'), t('settings.languageHint'), segmented('language', t('settings.language'), LANGUAGES)),
+    allowed('currency') && settingRow(t('settings.currency'),
+      `${t('settings.currencyHint')}<br><span id="currencyExample">${t('settings.example', { value: money.format(1234.5) })}</span>`,
+      segmented('currency', t('settings.currency'), Object.fromEntries(Object.keys(CURRENCIES).map((c) => [c, c])))),
+    allowed('infobox') && settingRow(t('settings.infoBox'), t('settings.infoBoxHint'), segmented('infoBox', t('settings.infoBox'), modes)),
+    allowed('infobox') && settingRow(t('home.due'), t('settings.dueBoxHint'), segmented('dueBox', t('home.due'), modes)),
+  ].filter(Boolean).join('')}</div>`;
+}
+
+function notifySection() {
+  if (!allowed('notify')) return `<div class="card settings"><p class="muted small center">${t('notify.demo')}</p></div>`;
+  const n = notifyOptions();
+  const mail = !!serverConfig.notify?.mail;
+  const hours = Array.from({ length: 24 }, (_, h) => `<option value="${h}" ${h === n.hour ? 'selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('');
+  const before = NOTIFY_BEFORE.map((d) => `
+    <label><input type="checkbox" name="before" value="${d}" ${n.before.includes(d) ? 'checked' : ''}><span>${icon('check')}${d ? tn('notify.days', d) : t('notify.onDay')}</span></label>`).join('');
+  return `
+    <form class="card settings notify-card" id="notifyForm" novalidate>
+      ${settingRow(t('notify.email'), mail ? '' : t('notify.noMail'), `
+        <div class="setting-inline">
+          <input type="email" class="text-input" name="email" value="${esc(n.email)}" placeholder="${t('ph.email')}" aria-label="${t('notify.emailAddress')}" autocomplete="email" ${mail ? '' : 'disabled'}>
+          ${switchInput('enabled', n.enabled && mail, t('notify.email'), !mail)}
+        </div>`)}
+      ${settingRow(t('notify.hour'), t('notify.timeZone', { zone: esc(serverConfig.notify?.timeZone ?? '') }), `<select class="text-input" name="hour" aria-label="${t('notify.hour')}">${hours}</select>`)}
+      ${settingRow(t('notify.before'), t('notify.beforeHint'), `<div class="check-chips">${before}</div>`)}
+      ${settingRow(t('notify.frequency'), '', segmented('frequency', t('notify.frequency'),
+        { new: t('notify.freq.new'), daily: t('notify.freq.daily'), weekly: t('notify.freq.weekly') }, n.frequency))}
+      ${settingRow(t('notify.overdue'), '', segmented('overdue', t('notify.overdue'),
+        [['never', t('notify.repeat.never')], ['3', t('notify.repeat.3')], ['7', t('notify.repeat.7')]], n.overdue))}
+      ${settingRow(t('notify.push'), serverConfig.notify?.apprise ? t('notify.pushHintApprise') : t('notify.pushHint'), `
+        <div class="setting-inline">
+          <input class="text-input" name="pushUrl" value="${esc(n.push.url)}" placeholder="ntfy://ntfy.sh/${t('ph.topic')}" aria-label="${t('notify.pushUrl')}" autocomplete="off" spellcheck="false">
+          ${switchInput('pushEnabled', n.push.enabled, t('notify.push'))}
+        </div>`)}
+    </form>
+    <p class="notify-preview" id="notifyPreview"></p>
+    <div class="settings-actions">
+      <button type="button" class="btn ghost" data-action="notify-test">${t('notify.test')}</button>
+      <button type="submit" class="btn primary" form="notifyForm">${t('btn.save')}</button>
+    </div>`;
+}
+
+// "Next notification: tomorrow, 07:00 · Oil change (Skoda) in 1 day · …"
+let previewTimer = null;
+function updateNotifyPreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(async () => {
+    const form = $('#notifyForm');
+    const el = $('#notifyPreview');
+    if (!form || !el) return;
+    const n = notifyFromForm(form);
+    if (!(n.enabled && isEmail(n.email)) && !(n.push.enabled && n.push.url)) {
+      el.innerHTML = esc(t('notify.off'));
+      return;
+    }
+    try {
+      const p = await api('POST', '/api/carmaint/notify/preview', n);
+      if (!el.isConnected) return;
+      const days = daysUntil(p.date);
+      const day = days === 0 ? t('due.today') : days === 1 ? t('due.tomorrow')
+        : noWeekdayDot(asDate(p.date).toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: '2-digit' }));
+      const when = `${day}, ${String(p.hour).padStart(2, '0')}:00`;
+      const items = p.items.length ? p.items.map((i) => `${esc(i.title)} (${esc(i.car)}) ${esc(i.label)}`).join(' · ') : esc(t('notify.nothing'));
+      el.innerHTML = `${esc(t('notify.next'))} <strong>${esc(when)}</strong> · ${items}`;
+    } catch (err) {
+      console.warn('Preview failed', err);
+    }
+  }, 250);
+}
+
+document.addEventListener('input', (ev) => { if (ev.target.closest('#notifyForm')) updateNotifyPreview(); });
+document.addEventListener('change', (ev) => { if (ev.target.closest('#notifyForm')) updateNotifyPreview(); });
+
+document.addEventListener('submit', (ev) => {
+  if (ev.target.id !== 'notifyForm') return;
+  ev.preventDefault();
+  const n = notifyFromForm(ev.target);
+  if (n.enabled && !isEmail(n.email)) return toast(t('notify.needEmail'));
+  if (n.push.enabled && !n.push.url) return toast(t('notify.needPush'));
+  saveSettings({ notify: n }).then((ok) => ok && toast(t('notify.saved')));
+});
+
+async function sendTestNotification() {
+  const n = notifyFromForm($('#notifyForm'));
+  const email = serverConfig.notify?.mail && isEmail(n.email) ? n.email : '';
+  if (!email && !n.push.url) throw new Error(t('notify.needTarget'));
+  toast(t('notify.sending'), 0);
+  await api('POST', '/api/carmaint/notify/test', { email, push: n.push.url });
+  toast(t('notify.testSent', { to: [email, n.push.url].filter(Boolean).join(' · ') }));
+}
+
+function dataSection() {
   const backup = [
     allowed('export') && `<button class="btn ghost" data-action="export">${icon('download')}${t('btn.export')}</button>`,
     allowed('import') && `<label class="btn ghost">${icon('upload')}${t('btn.import')}<input type="file" accept="application/json,.json" data-import hidden></label>`,
   ].filter(Boolean).join('');
-
-  $('#app').innerHTML = `
-    <a href="#/" class="back">${icon('back')}${t('nav.back')}</a>
-    <section class="hero"><h1>${t('settings.title')}</h1></section>
-
-    ${display ? `
-      <div class="section-head"><h2>${t('settings.display')}</h2></div>
-      <div class="card settings">${display}</div>` : ''}
-
-    <div class="section-head"><h2>${t('settings.data')}</h2></div>
+  return `
     <div class="card settings">
       <div class="setting">
         <div class="grow">
@@ -965,40 +1081,56 @@ function renderSettings() {
           ${serverConfig.storageLimitMB ? '<div class="meter" id="storageMeter" hidden><span></span></div>' : ''}
         </div>
       </div>
-      ${backup ? `
-        <div class="setting">
-          <div>
-            <h3>${t('settings.backup')}</h3>
-            <p class="muted small">${t('settings.backupHint')}</p>
-          </div>
-          <div class="setting-actions">${backup}</div>
-        </div>` : ''}
-    </div>
+      ${backup ? settingRow(t('settings.backup'), t('settings.backupHint'), `<div class="setting-actions">${backup}</div>`) : ''}
+    </div>`;
+}
 
-    <div class="section-head"><h2>${t('settings.account')}</h2></div>
+function accountSection() {
+  return `
     <div class="card settings">
-      <div class="setting">
-        <div>
-          <h3>${esc(me().username)}</h3>
-          <p class="muted small">${isDemo() ? t('role.demo') : isAdmin() ? t('role.adminLong') : t('role.user')}</p>
-        </div>
+      ${settingRow(esc(me().username), isDemo() ? t('role.demo') : isAdmin() ? t('role.adminLong') : t('role.user'), `
         <div class="setting-actions">
           ${allowed('password') ? `<button class="btn ghost" data-action="change-password" data-id="${esc(me().id)}">${icon('key')}${t('pw.change')}</button>` : ''}
           <button class="btn ghost" data-action="logout">${icon('logout')}${t('nav.logout')}</button>
+        </div>`)}
+    </div>`;
+}
+
+function adminSection() {
+  return `
+    <div class="section-head">
+      <h2>${t('settings.users')}</h2>
+      <button class="btn ghost sm-btn" data-action="add-user">${icon('userPlus')}${t('btn.add')}</button>
+    </div>
+    <div class="card settings" id="usersCard"><p class="muted small center">${t('settings.loadingUsers')}</p></div>`;
+}
+
+function renderSettings(sectionKey) {
+  const sections = SETTINGS_SECTIONS.filter((s) => !s.admin || isAdmin());
+  const section = sections.find((s) => s.key === sectionKey) ?? sections[0];
+  const content = { display: displaySection, notify: notifySection, data: dataSection, account: accountSection, admin: adminSection }[section.key]();
+
+  $('#app').innerHTML = `
+    <a href="#/" class="back">${icon('back')}${t('nav.back')}</a>
+    <section class="hero"><h1>${t('settings.title')}</h1></section>
+    <div class="settings-layout">
+      <nav class="settings-nav" aria-label="${t('settings.title')}">
+        ${sections.map((s) => `
+          <a href="#/settings/${s.key}" ${s === section ? 'aria-current="page"' : ''}>${icon(s.icon)}<span>${t(`settings.nav.${s.key}`)}</span></a>`).join('')}
+      </nav>
+      <div class="settings-main">
+        <div class="settings-head">
+          <h2>${t(`settings.nav.${section.key}`)}</h2>
+          <p class="muted">${t(`settings.sub.${section.key}`)}</p>
         </div>
+        ${content}
       </div>
     </div>
-
-    ${isAdmin() ? `
-      <div class="section-head">
-        <h2>${t('settings.users')}</h2>
-        <button class="btn ghost sm-btn" data-action="add-user">${icon('userPlus')}${t('btn.add')}</button>
-      </div>
-      <div class="card settings" id="usersCard"><p class="muted small center">${t('settings.loadingUsers')}</p></div>` : ''}
     ${settingsFooter()}`;
 
-  renderStorage();
-  if (isAdmin()) renderUsers();
+  if (section.key === 'data') renderStorage();
+  if (section.key === 'admin') renderUsers();
+  if (section.key === 'notify') updateNotifyPreview();
 }
 
 // Static links only – nothing is fetched from GitHub.
@@ -1081,12 +1213,13 @@ async function renderUsers() {
   }
 }
 
-function segmented(name, ariaLabel, options) {
+// options: { value: label } or [[value, label], …] (keeps the order of numeric values)
+function segmented(name, ariaLabel, options, current = settings[name]) {
   return `
     <div class="segmented" role="radiogroup" aria-label="${esc(ariaLabel)}">
-      ${Object.entries(options).map(([value, label]) => `
+      ${(Array.isArray(options) ? options : Object.entries(options)).map(([value, label]) => `
         <label>
-          <input type="radio" name="${name}" value="${value}" ${settings[name] === value ? 'checked' : ''}>
+          <input type="radio" name="${name}" value="${value}" ${String(current) === value ? 'checked' : ''}>
           <span>${esc(label)}</span>
         </label>`).join('')}
     </div>`;
@@ -1125,9 +1258,11 @@ function carCard(car) {
   const perKm = costPerKm([car]);
   const sub = [car.year, car.plate].filter(Boolean).map(esc).join(' · ');
   const name = esc(carName(car));
+  // "Last: Service · 21 Sept 2026" – also below the timeline
+  const lastLine = last ? `<p class="card-last muted">${t('card.last', { title: esc(last.title) })} · <span class="nowrap">${fmtDate(last.date)}</span></p>` : '';
   const foot = next
-    ? carTimeline(states)
-    : `<p class="muted">${last ? `${t('card.last', { title: esc(last.title) })} · <span class="nowrap">${fmtDate(last.date)}</span>` : t('card.noEntries')}</p>`;
+    ? carTimeline(states) + lastLine
+    : lastLine || `<p class="muted">${t('card.noEntries')}</p>`;
   return `
     <article class="card car-card">
       <div class="car-media">${carMedia(car, '640x360')}</div>
@@ -1332,10 +1467,20 @@ function docValidity(doc) {
   return `<small class="muted">${esc(t('doc.validUntilShort', { date: monthYear }))}</small>`;
 }
 
+// Fields that stay visible when the vehicle data is collapsed: chosen per car
+// (info.pinned, 2–4 fields) or by default VIN and type approval.
+const PIN_MIN = 2;
+const PIN_MAX = 4;
+const defaultPins = () => INFO_FIELDS.filter((f) => f.pinned).map((f) => f.key);
+const pinnedKeys = (car) => (Array.isArray(car.info?.pinned) ? car.info.pinned : defaultPins());
+
 function infoBox(car) {
   const info = car.info ?? {};
-  const rows = INFO_FIELDS.filter((f) => info[f.key] != null && info[f.key] !== '');
-  const hiddenCount = rows.filter((f) => !f.pinned).length;
+  const pins = pinnedKeys(car);
+  const filled = INFO_FIELDS.filter((f) => info[f.key] != null && info[f.key] !== '');
+  // The chosen fields come first
+  const rows = [...filled.filter((f) => pins.includes(f.key)), ...filled.filter((f) => !pins.includes(f.key))];
+  const hiddenCount = rows.filter((f) => !pins.includes(f.key)).length;
   const collapsible = hiddenCount > 0;
   const collapsed = collapsible && infoCollapsed;
   const id = esc(car.id);
@@ -1351,7 +1496,7 @@ function infoBox(car) {
       <div class="infobox">
       ${rows.length
         ? `<dl class="info-list">${rows.map((f) => `
-            <div${f.pinned ? ' class="pinned"' : ''}><dt>${fieldName(f)}</dt><dd>${f.format ? f.format(info[f.key]) : esc(info[f.key])}</dd></div>`).join('')}
+            <div${pins.includes(f.key) ? ' class="pinned"' : ''}><dt>${fieldName(f)}</dt><dd>${f.format ? f.format(info[f.key]) : esc(info[f.key])}</dd></div>`).join('')}
           </dl>
           ${collapsible ? `<button class="info-more" data-action="toggle-info">${tn('info.more', hiddenCount)}</button>` : ''}`
         : `<div class="infobox-empty">
@@ -1830,15 +1975,45 @@ function infoInput(f, value) {
 function openInfoDialog(car) {
   const info = car.info ?? {};
   const groups = [...new Set(INFO_FIELDS.map((f) => f.group))];
-  $('#infoFields').innerHTML = groups.map((g) => `
+  const custom = Array.isArray(info.pinned);
+  const pins = pinnedKeys(car);
+  const mode = (value, label) => `
+    <label><input type="radio" name="pinMode" value="${value}" ${(value === 'custom') === custom ? 'checked' : ''}><span>${label}</span></label>`;
+  $('#infoFields').innerHTML = `
+    <div class="form-group">
+      <h3>${t('info.shown')}</h3>
+      <div class="segmented" role="radiogroup" aria-label="${t('info.shown')}">${mode('default', t('info.shownDefault'))}${mode('custom', t('info.shownCustom'))}</div>
+      <div class="pin-chips" id="pinChips">${INFO_FIELDS.map((f) => `
+        <label><input type="checkbox" name="pin" value="${f.key}" ${pins.includes(f.key) ? 'checked' : ''}><span>${esc(fieldName(f))}</span></label>`).join('')}
+      </div>
+      <p class="muted small">${t('info.shownHint', { min: PIN_MIN, max: PIN_MAX })}</p>
+    </div>
+    ${groups.map((g) => `
     <div class="form-group">
       <h3>${t(`info.group.${g}`)}</h3>
       <div class="row">${INFO_FIELDS.filter((f) => f.group === g).map((f) => infoInput(f, info[f.key])).join('')}</div>
-    </div>`).join('');
+    </div>`).join('')}`;
   infoForm.elements.namedItem('carId').value = car.id;
   $('#infoDialogTitle').textContent = t('info.dialogTitle', { car: `${car.make} ${car.model}` });
+  updatePinChips();
   showDialog(infoDialog);
 }
+
+// Default: the standard fields, fixed. Own choice: starts empty (the standard
+// fields do not apply any more), at most PIN_MAX fields.
+function updatePinChips(switched = false) {
+  const custom = infoForm.elements.namedItem('pinMode').value === 'custom';
+  const boxes = [...infoForm.querySelectorAll('input[name="pin"]')];
+  if (!custom) boxes.forEach((b) => { b.checked = defaultPins().includes(b.value); });
+  else if (switched) boxes.forEach((b) => { b.checked = false; });
+  const full = boxes.filter((b) => b.checked).length >= PIN_MAX;
+  boxes.forEach((b) => { b.disabled = !custom || (full && !b.checked); });
+  $('#pinChips').classList.toggle('off', !custom);
+}
+
+infoForm.addEventListener('change', (ev) => {
+  if (['pinMode', 'pin'].includes(ev.target.name)) updatePinChips(ev.target.name === 'pinMode');
+});
 
 infoForm.addEventListener('submit', (ev) => {
   ev.preventDefault();
@@ -1849,7 +2024,13 @@ infoForm.addEventListener('submit', (ev) => {
       const raw = String(form.get(f.key) ?? '').trim();
       if (raw) info[f.key] = f.type === 'number' ? Number(raw) : f.upper ? raw.toUpperCase() : raw;
     }
+    if (form.get('pinMode') === 'custom') {
+      const pins = form.getAll('pin');
+      if (pins.length < PIN_MIN || pins.length > PIN_MAX) throw new Error(t('info.shownError', { min: PIN_MIN, max: PIN_MAX }));
+      info.pinned = pins;
+    }
     upsertLocal('cars', await api('PATCH', rec('cars', form.get('carId')), { info }));
+    if (info.pinned) infoCollapsed = true;
     infoDialog.close();
     route();
     toast(t('toast.infoSaved'));
@@ -2471,6 +2652,9 @@ document.addEventListener('click', (ev) => {
       el.setAttribute('aria-expanded', !collapsedDue.has(key));
       break;
     }
+    case 'notify-test':
+      runAction(sendTestNotification);
+      break;
     case 'toggle-menu': {
       const menu = el.nextElementSibling;
       menu.hidden = !menu.hidden;

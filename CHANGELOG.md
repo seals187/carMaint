@@ -6,6 +6,19 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.2.1] – 2026-10-21
+
+### Added
+- Reminder notifications by e-mail (needs `SMTP_HOST` and `MAIL_FROM`) and push to the phone (ntfy directly, Telegram, Pushover … via an Apprise server, `APPRISE_URL`). Every user chooses under Settings › Notifications: time, days before (30, 14, 7, 1, on the day – estimated for mileage reminders), frequency (only when new, daily, weekly) and how often overdue items are repeated; with a preview of the next mail and a test button. `NOTIFY_HOUR` sets the default time; `DEMO_DISABLED=notify` hides it for the demo user
+- Settings with a side menu (display, notifications, data & backup, account, administration)
+- Vehicle data: tyre sizes (summer and winter tyres)
+- Car cards show the last entry (“Last: Service · date”) below the reminder timeline again
+- Vehicle data: choose per car which 2–4 fields are shown (default: VIN and type approval); with an own choice only these are shown, the rest via “show more fields”
+
+### Changed
+- Phones: smaller car photo on the car page
+- Opening another page starts at the top instead of keeping the scroll position
+
 ## [0.2.0] – 2026-10-21
 
 ### Added
@@ -103,7 +116,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/seals187/carMaint/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/seals187/carMaint/compare/v0.1.7...v0.2.0
 [0.1.7]: https://github.com/seals187/carMaint/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/seals187/carMaint/compare/v0.1.5...v0.1.6

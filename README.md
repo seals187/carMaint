@@ -53,13 +53,16 @@ All settings live in `.env` – see [`.env.example`](.env.example) for every opt
 | Variable | Description |
 |---|---|
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | First user (admin), created on first start. Password min. 8 characters |
-| `CARMAINT_VERSION` | `latest`, a fixed version such as `0.2.0`, or `edge` |
+| `CARMAINT_VERSION` | `latest`, a fixed version such as `0.2.1`, or `edge` |
 | `PORT` | Host port (default `8090`) |
 | `DEFAULT_CURRENCY` | `EUR`, `CHF` or `USD` |
 | `DEFAULT_LANGUAGE` | `de`, `en`, `es` or `fr` (default `en`) – used when the browser language is not supported; users can switch in the app |
 | `MAX_FILE_SIZE_MB` | Max. size per uploaded file in MB (default `20`, max. `30`) |
 | `USER_STORAGE_LIMIT_MB` | Max. storage per user for photos, receipts and documents in MB (default `0` = unlimited) |
 | `ALLOWED_FILE_TYPES` | Allowed upload types: `pdf`, `jpg`, `png` (default `pdf,jpg`) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM` | Mail server for e-mail reminders (optional); users switch them on in the settings |
+| `NOTIFY_HOUR` | Default time of the reminder notification (hour, default `7`); users can change it |
+| `APPRISE_URL` | Optional Apprise API server for push to Telegram, Pushover … (ntfy works without it) |
 | `TRUSTED_PROXY_HEADERS` | e.g. `X-Forwarded-For` when running behind a reverse proxy |
 
 Apply changes with `docker compose up -d`. Forgot the admin password? Set `ADMIN_RESET_PASSWORD=true`
@@ -72,6 +75,8 @@ For access from the internet, put a reverse proxy with HTTPS in front (e.g. Cadd
 - **Users:** admins manage accounts under *Settings → Users*. Every user only sees their own vehicles.
 - **Reminders:** when adding an entry, tick *Remind me next time* (km and/or months) – due items appear
   on the home page and on the car. Documents with an expiry date can remind you 30 days before.
+  Reminders can also arrive by e-mail (needs `SMTP_*`) or as push to the phone (ntfy, or other services via Apprise)
+  – time, days before, frequency and repeats are set per user under *Settings → Notifications*.
 - **Demo account:** `DEMO_USERNAME` / `DEMO_PASSWORD` create a restricted user on startup;
   `DEMO_DISABLED` hides settings such as *Change password* for it (see [`.env.example`](.env.example)).
 - **Backup:** *Settings → Backup* exports/imports all data of a user as one JSON file.

@@ -363,6 +363,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   box-shadow: 0 0 0 2px var(--surface);
 }
 .tl-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; font-size: .85rem; }
+.tl-legend + .card-last { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.card-last { font-size: .8rem; }
 .tl-legend li { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .tl-legend .muted { font-variant-numeric: tabular-nums; }
 .card-foot .dot { display: inline-block; flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
@@ -535,6 +537,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 [data-color="red"] { --c: var(--danger); }
 
 #infoFields { display: flex; flex-direction: column; gap: 18px; }
+/* Vehicle data shown when collapsed (chosen per car) */
+.pin-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
+.pin-chips label { position: relative; cursor: pointer; }
+.pin-chips input { position: absolute; opacity: 0; pointer-events: none; }
+.pin-chips span {
+  display: block; padding: 4px 11px; border: 1px solid var(--border); border-radius: 999px;
+  color: var(--text); font-size: .82rem; font-weight: 500;
+}
+.pin-chips label:hover span { background: var(--surface-2); }
+.pin-chips input:checked + span { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+.pin-chips input:disabled + span { cursor: default; opacity: .45; }
+.pin-chips input:checked:disabled + span { opacity: .8; }
+.pin-chips input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pin-chips.off label { cursor: default; }
 .form-group h3 { margin-bottom: 10px; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); }
 
 
@@ -593,6 +609,69 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .meter span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .3s; }
 .meter[data-level="high"] span { background: var(--danger); }
 .storage-full { color: var(--danger); font-weight: 600; }
+/* Settings: side menu + section */
+.settings-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px; align-items: start; }
+.settings-nav { position: sticky; top: 76px; display: flex; flex-direction: column; gap: 4px; }
+.settings-nav a {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px;
+  color: var(--muted); font-weight: 600;
+}
+.settings-nav a:hover { background: var(--surface-2); color: var(--text); }
+.settings-nav a[aria-current="page"] { background: var(--surface-2); color: var(--text); }
+.settings-nav a[aria-current="page"] .ic { color: var(--accent); }
+.settings-head { margin-bottom: 14px; }
+.settings-head h2 { font-size: 1.25rem; }
+.settings-head p { margin-top: 2px; }
+.settings-main > .card + .section-head { margin-top: 20px; }
+.setting-inline { display: flex; align-items: center; gap: 12px; }
+.text-input {
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-2); color: var(--text); outline: none; min-width: 0;
+}
+.text-input:focus { border-color: var(--accent); }
+.text-input:disabled { opacity: .5; }
+input.text-input { width: min(300px, 100%); }
+/* On/off switch */
+.switch { position: relative; flex-shrink: 0; width: 44px; height: 26px; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: inherit; }
+.switch span { position: absolute; inset: 0; border-radius: 999px; background: var(--border); transition: background .15s; pointer-events: none; }
+.switch span::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--muted); transition: transform .15s, background .15s;
+}
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(18px); background: #fff; }
+.switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch input:disabled + span { opacity: .45; }
+/* Multiple choice chips with a check mark */
+.check-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.check-chips label { position: relative; cursor: pointer; }
+.check-chips input { position: absolute; opacity: 0; pointer-events: none; }
+.check-chips span {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border: 1px solid var(--border);
+  border-radius: 999px; font-size: .88rem; font-weight: 600; color: var(--muted); white-space: nowrap;
+}
+.check-chips .ic { display: none; width: 14px; height: 14px; }
+.check-chips label:hover span { color: var(--text); }
+.check-chips input:checked + span { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.check-chips input:checked + span .ic { display: block; }
+.check-chips input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.notify-preview {
+  margin: 14px 0 0; padding: 12px 16px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 12px; background: color-mix(in srgb, var(--accent) 6%, var(--surface)); color: var(--muted); font-size: .9rem;
+}
+.notify-preview:empty { display: none; }
+.notify-preview strong { color: var(--text); }
+.settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+@media (max-width: 760px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .settings-nav { position: static; flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 2px; }
+  .settings-nav a { flex-shrink: 0; padding: 7px 12px; border: 1px solid var(--border); border-radius: 999px; font-size: .88rem; }
+  .setting-inline { width: 100%; }
+  input.text-input { width: 100%; }
+  .check-chips { justify-content: flex-start; }
+  .settings-actions .btn { flex: 1; justify-content: center; }
+}
 .segmented { display: inline-flex; padding: 4px; gap: 4px; border-radius: 12px; background: var(--surface-2); }
 .segmented label { position: relative; cursor: pointer; }
 .segmented input { position: absolute; opacity: 0; pointer-events: none; }
@@ -952,6 +1031,7 @@ dialog.sheet { width: min(460px, calc(100% - 32px)); }
   .entry-detail { padding: 0 4px 12px 16px; }
   .file-chips { padding: 0 4px 12px 78px; }
   .entry.open { margin: 4px -8px; padding: 0 8px; }
+  .car-side-media { aspect-ratio: auto; height: 120px; }
   .row-title { grid-template-columns: 1fr; }
   .kbd-hint { display: none; }
   .dialog-foot .btn { flex: 1; justify-content: center; }

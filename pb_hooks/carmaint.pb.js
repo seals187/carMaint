@@ -20,6 +20,17 @@ onBootstrap((be) => {
     if (cfg.appUrl) settings.meta.appURL = cfg.appUrl;
     settings.rateLimits.enabled = true; // slows down password guessing, among other things
     settings.trustedProxy.headers = cfg.trustedProxyHeaders;
+    // Mail delivery for e-mail reminders (SMTP_*, MAIL_FROM)
+    if (cfg.mailEnabled) {
+      settings.smtp.enabled = true;
+      settings.smtp.host = cfg.smtp.host;
+      settings.smtp.port = cfg.smtp.port;
+      settings.smtp.username = cfg.smtp.username;
+      settings.smtp.password = cfg.smtp.password;
+      settings.smtp.tls = cfg.smtp.tls;
+      settings.meta.senderAddress = cfg.mailFrom;
+      settings.meta.senderName = cfg.mailFromName;
+    }
     e.app.save(settings);
 
     // Upload rules for photos and receipts: max. size per file (MAX_FILE_SIZE_MB)
@@ -119,8 +130,47 @@ routerAdd('GET', '/api/carmaint/config', (e) => {
     storageLimitMB: cfg.storageLimitMB,
     fileTypes: cfg.fileTypes,
     demo: cfg.demoUsername ? { username: cfg.demoUsername, disabled: cfg.demoDisabled } : null,
+    notify: { mail: cfg.mailEnabled, apprise: !!cfg.appriseUrl, hour: cfg.notifyHour, timeZone: cfg.timeZone },
   });
 });
+
+// Reminder notifications (e-mail / push): checked every hour, each user at their own hour
+cronAdd('carmaint-notify', '0 * * * *', () => {
+  const cfg = require(`${__hooks}/config.js`);
+  require(`${__hooks}/notify.js`).run($app, cfg);
+});
+
+// Test message to the given e-mail address and/or push URL of the signed-in user
+routerAdd('POST', '/api/carmaint/notify/test', (e) => {
+  const cfg = require(`${__hooks}/config.js`);
+  const notify = require(`${__hooks}/notify.js`);
+  if (notify.demoBlocked(cfg, e.auth)) throw new ForbiddenError('Not allowed for the demo user.');
+  const body = e.requestInfo().body;
+  const email = cfg.mailEnabled && notify.isEmail(body.email) ? String(body.email).trim() : '';
+  const push = String(body.push || '').trim();
+  if (!email && !push) throw new BadRequestError('No valid e-mail address or push URL.');
+  try {
+    notify.test(e.app, cfg, e.auth, notify.settingsOf(e.auth), email, push);
+  } catch (err) {
+    e.app.logger().error('CarMaint: test notification failed', 'error', String(err));
+    throw new BadRequestError(`Sending failed: ${String(err)}`);
+  }
+  return e.noContent(204);
+}, $apis.requireAuth());
+
+// Preview: when the next notification would be sent with these options, and what it contains
+routerAdd('POST', '/api/carmaint/notify/preview', (e) => {
+  const cfg = require(`${__hooks}/config.js`);
+  const notify = require(`${__hooks}/notify.js`);
+  return e.json(200, notify.preview(e.app, cfg, e.auth, notify.settingsOf(e.auth), e.requestInfo().body));
+}, $apis.requireAuth());
+
+// Send the notifications now, regardless of hour and weekday (admins only) – for testing
+routerAdd('POST', '/api/carmaint/notify/run', (e) => {
+  if (e.auth.getString('role') !== 'admin') throw new ForbiddenError('Admins only.');
+  const cfg = require(`${__hooks}/config.js`);
+  return e.json(200, { sent: require(`${__hooks}/notify.js`).run(e.app, cfg, true) });
+}, $apis.requireAuth());
 
 // Demo user: block disabled settings on the server, not only in the UI.
 // The username is locked too, otherwise renaming would lift the restrictions.

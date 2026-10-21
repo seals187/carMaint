@@ -29,7 +29,11 @@ const allowedFileTypes = fileTypes.length ? fileTypes : [FILE_TYPES.pdf, FILE_TY
 const imageTypes = allowedFileTypes.filter((type) => type.startsWith('image/'));
 
 // Settings that can be disabled for the demo user
-const DEMO_OPTIONS = ['language', 'currency', 'infobox', 'export', 'import', 'password'];
+const DEMO_OPTIONS = ['language', 'currency', 'infobox', 'export', 'import', 'password', 'notify'];
+
+// E-mail reminders: only active when an SMTP server and a sender are set
+const smtpHost = env('SMTP_HOST');
+const mailFrom = env('MAIL_FROM');
 
 module.exports = {
   appName: env('APP_NAME', 'CarMaint'),
@@ -54,6 +58,24 @@ module.exports = {
 
   superuserEmail: env('PB_SUPERUSER_EMAIL'),
   superuserPassword: env('PB_SUPERUSER_PASSWORD'),
+
+  smtp: {
+    host: smtpHost,
+    port: int('SMTP_PORT', 587),
+    username: env('SMTP_USERNAME'),
+    password: env('SMTP_PASSWORD'),
+    // true = implicit TLS (usually port 465); with false, STARTTLS is used when offered (587)
+    tls: env('SMTP_TLS', 'false').toLowerCase() === 'true',
+  },
+  mailFrom,
+  mailFromName: env('MAIL_FROM_NAME', env('APP_NAME', 'CarMaint')),
+  mailEnabled: !!(smtpHost && mailFrom),
+  // Default hour of the reminder notification (server time zone TZ); every user can change it
+  notifyHour: Math.min(23, Math.max(0, int('NOTIFY_HOUR', 7))),
+  timeZone: env('TZ', 'UTC'),
+  // Optional Apprise API server (e.g. http://apprise:8000) for push services
+  // such as Telegram or Pushover; ntfy works without it
+  appriseUrl: env('APPRISE_URL').replace(/\/+$/, ''),
 
   trustedProxyHeaders: env('TRUSTED_PROXY_HEADERS').split(',').map((h) => h.trim()).filter(Boolean),
 
