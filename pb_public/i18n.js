@@ -74,6 +74,8 @@ const I18N = {
     'photos.makeCover': 'Als Titelbild',
     'photos.delete': 'Foto löschen',
     'photos.add': 'Fotos hinzufügen',
+    'photos.larger': 'Foto grösser',
+    'photos.smaller': 'Foto kleiner',
     'history.title': 'Historie',
     'filter.all': 'Alle',
     'search.placeholder': 'Suchen …',
@@ -353,7 +355,6 @@ const I18N = {
 
     // Overview, reminders & dashboard (0.2)
     'type.fuel': 'Tanken',
-    'nav.due': '{n} fällig|{n} fällig',
     'home.yearSoFar': '{year} bisher {amount}',
     'home.perKm': 'Ø {amount} / km',
     'home.due': 'Bald fällig',
@@ -578,6 +579,8 @@ const I18N = {
     'photos.makeCover': 'Set as cover',
     'photos.delete': 'Delete photo',
     'photos.add': 'Add photos',
+    'photos.larger': 'Larger photo',
+    'photos.smaller': 'Smaller photo',
     'history.title': 'History',
     'filter.all': 'All',
     'search.placeholder': 'Search …',
@@ -857,7 +860,6 @@ const I18N = {
 
     // Overview, reminders & dashboard (0.2)
     'type.fuel': 'Fuel',
-    'nav.due': '{n} due|{n} due',
     'home.yearSoFar': '{year} so far {amount}',
     'home.perKm': 'Ø {amount} / km',
     'home.due': 'Due soon',
@@ -1082,6 +1084,8 @@ const I18N = {
     'photos.makeCover': 'Usar como portada',
     'photos.delete': 'Eliminar foto',
     'photos.add': 'Añadir fotos',
+    'photos.larger': 'Foto más grande',
+    'photos.smaller': 'Foto más pequeña',
     'history.title': 'Historial',
     'filter.all': 'Todos',
     'search.placeholder': 'Buscar …',
@@ -1361,7 +1365,6 @@ const I18N = {
 
     // Overview, reminders & dashboard (0.2)
     'type.fuel': 'Combustible',
-    'nav.due': '{n} pendiente|{n} pendientes',
     'home.yearSoFar': '{year} hasta ahora {amount}',
     'home.perKm': 'Ø {amount} / km',
     'home.due': 'Próximos vencimientos',
@@ -1586,6 +1589,8 @@ const I18N = {
     'photos.makeCover': 'Définir comme couverture',
     'photos.delete': 'Supprimer la photo',
     'photos.add': 'Ajouter des photos',
+    'photos.larger': 'Agrandir la photo',
+    'photos.smaller': 'Réduire la photo',
     'history.title': 'Historique',
     'filter.all': 'Tous',
     'search.placeholder': 'Rechercher …',
@@ -1865,7 +1870,6 @@ const I18N = {
 
     // Overview, reminders & dashboard (0.2)
     'type.fuel': 'Carburant',
-    'nav.due': '{n} à faire|{n} à faire',
     'home.yearSoFar': '{year} jusqu’ici {amount}',
     'home.perKm': 'Ø {amount} / km',
     'home.due': 'Bientôt à faire',

@@ -20,15 +20,16 @@ const INFO_MODES = ['open', 'closed', 'remember'];
 const DEFAULT_SETTINGS = { currency: 'EUR', infoBox: 'remember', infoCollapsed: false, dueBox: 'remember', dueCollapsed: false, language: 'de', templates: [] };
 
 const TYPES = {
-  service:    { color: 'blue' },
-  repair:     { color: 'orange' },
-  inspection: { color: 'green' },
-  tires:      { color: 'purple' },
-  fuel:       { color: 'yellow' },
-  documents:  { color: 'teal' },
-  other:      { color: 'gray' },
+  service:    { color: 'blue', icon: 'wrench' },
+  repair:     { color: 'orange', icon: 'hammer' },
+  inspection: { color: 'green', icon: 'clipboardCheck' },
+  tires:      { color: 'purple', icon: 'tire' },
+  fuel:       { color: 'yellow', icon: 'fuel' },
+  documents:  { color: 'teal', icon: 'file' },
+  other:      { color: 'gray', icon: 'tag' },
 };
 const typeLabel = (type) => t(`type.${TYPES[type] ? type : 'other'}`);
+const typeIcon = (type) => icon((TYPES[type] ?? TYPES.other).icon);
 // Types of history entries (documents have their own section since 0.2)
 const ENTRY_TYPES = Object.keys(TYPES).filter((type) => type !== 'documents');
 
@@ -80,6 +81,11 @@ const ICONS = {
   more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   textSize: '<path d="M21 14h-5"/><path d="M16 16v-3.5a2.5 2.5 0 0 1 5 0V16"/><path d="M4.5 13h6"/><path d="m3 16 4.5-9 4.5 9"/>',
   alarm: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/>',
+  history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+  hammer: '<path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5"/>',
+  clipboardCheck: '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
+  tire: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><path d="M12 9V2"/><path d="m14.85 11.07 6.65-2.17"/><path d="m13.76 14.43 4.14 5.67"/><path d="m10.24 14.43-4.14 5.67"/><path d="M9.15 11.07 2.5 8.9"/>',
+  tag: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>',
   chevronLeft:'<path d="m15 18-6-6 6-6"/>',
   chevronRight: '<path d="m9 18 6-6-6-6"/>',
   chevronDown: '<path d="m6 9 6 6 6-6"/>',
@@ -651,7 +657,7 @@ function setLanguage(next) {
   translateStatic();
   const types = Object.keys(TYPES).map((key) => `<option value="${key}">${typeLabel(key)}</option>`).join('');
   $('#typePills').innerHTML = ENTRY_TYPES.map((key) => `
-    <label><input type="radio" name="type" value="${key}"><span>${typeLabel(key)}</span></label>`).join('');
+    <label><input type="radio" name="type" value="${key}"><span>${typeIcon(key)}${typeLabel(key)}</span></label>`).join('');
   $('#reminderType').innerHTML = types;
 }
 
@@ -801,21 +807,12 @@ function route() {
     currentCarId = null;
     renderHome();
   }
-  renderDuePill();
+  $('#quickFab').hidden = !auth || !db.cars.length || !!location.hash.match(/^#\/settings/);
   // A different page starts at the top; re-rendering the same page keeps the position
   const page = view === 'car' && car ? `car/${car.id}` : view === 'settings' || view === 'costs' ? `${view}/${id ?? ''}` : 'home';
   if (page !== lastPage) window.scrollTo(0, 0);
   lastPage = page;
   hydrate();
-}
-
-// Phones: number of due reminders next to the logo (instead of the search field)
-function renderDuePill() {
-  const pill = $('#duePill');
-  const n = auth ? allReminders().filter((s) => s.level === 'overdue' || s.level === 'soon').length : 0;
-  pill.hidden = !n;
-  pill.textContent = tn('nav.due', n);
-  $('#quickFab').hidden = !auth || !db.cars.length || !!location.hash.match(/^#\/settings/);
 }
 
 function emptyState(iconName, title, text, action = '') {
@@ -1410,7 +1407,7 @@ function renderCar(car) {
           ${reminderPanel(car)}
         </section>
 
-        <div class="section-head history-head"><h2>${t('history.title')}</h2></div>
+        <div class="section-head history-head"><h2>${icon('history')}${t('history.title')}</h2></div>
         ${historyFilters(history)}
         <div id="entries"></div>
       </div>
@@ -1456,7 +1453,7 @@ function historyFilters(history) {
   if (!history.length) return '';
   return `<div class="filters" role="group" aria-label="${t('filter.aria')}">${filterOptions(history).map(([value, label, n]) => `
     <button class="tchip${n ? '' : ' none'}" data-action="filter" data-type="${value}" aria-pressed="${filter.type === value}">
-      ${value === 'all' ? '' : `<span class="dot" data-color="${TYPES[value].color}"></span>`}${esc(label)}<span class="tchip-n">${n}</span>
+      ${value === 'all' ? '' : typeIcon(value)}${esc(label)}<span class="tchip-n">${n}</span>
     </button>`).join('')}</div>`;
 }
 
@@ -1477,6 +1474,7 @@ function renderCarPhone(car) {
     ['docs', 'file', t('docs.title'), documentsFor(car.id).length],
   ];
   const panel = { info: () => infoBox(car), photos: () => photoSection(car), docs: () => docSection(car) }[phonePanel];
+  const size = phonePhotoSize();
 
   $('#app').innerHTML = `
     <div class="car-bar">
@@ -1494,14 +1492,19 @@ function renderCarPhone(car) {
       </div>
     </div>
 
-    <div class="car-phone-head">
+    <div class="car-phone-head" data-size="${size}">
       <div class="car-phone-photo">${photos[0]
-        ? `<button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="0" aria-label="${t('photos.view', { n: 1 })}"><img data-file="${esc(carFile(car, photos[0]))}" data-thumb="300x225" alt=""></button>`
+        ? `<button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="0" aria-label="${t('photos.view', { n: 1 })}"><img data-file="${esc(carFile(car, photos[0]))}" data-thumb="${PHONE_PHOTO_THUMBS[size]}" alt=""></button>`
         : carMedia(car)}</div>
       <div class="car-phone-name">
         <h1>${carTitle(car)}</h1>
         ${sub ? `<p class="muted">${sub}</p>` : ''}
       </div>
+      ${photos[0] ? `
+      <div class="photo-zoom">
+        <button class="icon-btn sm" data-action="photo-size" data-step="1" title="${t('photos.larger')}" aria-label="${t('photos.larger')}" ${size === PHONE_PHOTO_THUMBS.length - 1 ? 'disabled' : ''}>${icon('plus')}</button>
+        <button class="icon-btn sm" data-action="photo-size" data-step="-1" title="${t('photos.smaller')}" aria-label="${t('photos.smaller')}" ${size === 0 ? 'disabled' : ''}>${icon('minus')}</button>
+      </div>` : ''}
     </div>
 
     <div class="card phone-stats">
@@ -1525,7 +1528,7 @@ function renderCarPhone(car) {
       ${reminderPanel(car, true)}
     </section>
 
-    <div class="section-head history-head"><h2>${t('history.title')}</h2></div>
+    <div class="section-head history-head"><h2>${icon('history')}${t('history.title')}</h2></div>
     ${historyFilters(history)}
     <div id="entries"></div>
 
@@ -1539,6 +1542,10 @@ function renderCarPhone(car) {
 
   renderEntries(car);
 }
+
+// Size of the car photo on phones: small, medium, full width (thumbnail per size)
+const PHONE_PHOTO_THUMBS = ['300x225', '300x225', '640x360'];
+const phonePhotoSize = () => Math.min(PHONE_PHOTO_THUMBS.length - 1, Math.max(0, Number(settings.phonePhotoSize) || 0));
 
 // History filter: all and every entry type, with counts
 function filterOptions(entries) {
@@ -1942,7 +1949,7 @@ function remToggle(car, key) {
   const states = remindersFor(car.id).sort(bySoonest);
   return `
     <button class="rem-toggle" data-action="toggle-reminders" data-key="${key}" aria-expanded="${!settings[key]}">
-      <h2>${t('rem.title')}</h2>${states.length ? `<span class="count-pill" data-level="${states[0].level}">${states.length}</span>` : ''}${icon('chevronDown')}
+      <h2>${icon('alarm')}${t('rem.title')}</h2>${states.length ? `<span class="count-pill" data-level="${states[0].level}">${states.length}</span>` : ''}${icon('chevronDown')}
     </button>`;
 }
 
@@ -2096,12 +2103,12 @@ function entryItem(e) {
     <li class="entry${open ? ' open' : ''}" id="entry-${id}" data-color="${color}">
       ${isPhone() ? `
       <button class="entry-line compact" data-action="toggle-entry" data-id="${id}" aria-expanded="${open}">
-        <span class="entry-main"><strong>${esc(e.title)}</strong><span class="muted"><time datetime="${esc(e.date)}">${date}</time> · ${meta}${e.mileage ? ` · <span class="nowrap">${km(e.mileage)}</span>` : ''}${files ? ` · <span class="nowrap">${icon('paperclip')} ${files}</span>` : ''}</span></span>
+        <span class="entry-main"><strong><span class="entry-type">${typeIcon(e.type)}</span>${esc(e.title)}</strong><span class="muted"><time datetime="${esc(e.date)}">${date}</time> · ${meta}${e.mileage ? ` · <span class="nowrap">${km(e.mileage)}</span>` : ''}${files ? ` · <span class="nowrap">${icon('paperclip')} ${files}</span>` : ''}</span></span>
         <span class="entry-cost">${e.cost ? money.format(e.cost) : ''}</span>
       </button>` : `
       <button class="entry-line" data-action="toggle-entry" data-id="${id}" aria-expanded="${open}">
         <time datetime="${esc(e.date)}">${date}</time>
-        <span class="entry-main"><strong>${esc(e.title)}</strong><span class="muted">${meta}${files ? ` · <span class="nowrap">${icon('paperclip')} ${files}</span>` : ''}</span></span>
+        <span class="entry-main"><strong><span class="entry-type">${typeIcon(e.type)}</span>${esc(e.title)}</strong><span class="muted">${meta}${files ? ` · <span class="nowrap">${icon('paperclip')} ${files}</span>` : ''}</span></span>
         <span class="entry-km muted">${e.mileage ? km(e.mileage) : ''}</span>
         <span class="entry-cost">${e.cost ? money.format(e.cost) : ''}</span>
       </button>`}
@@ -3206,6 +3213,10 @@ document.addEventListener('click', (ev) => {
       route();
       break;
     }
+    case 'photo-size':
+      saveSettings({ phonePhotoSize: phonePhotoSize() + Number(el.dataset.step) });
+      route();
+      break;
     case 'view-photo': {
       const car = carById(id);
       openLightbox(car.photos.map((name) => ({ name: '', file: carFile(car, name), pages: [carFile(car, name)], total: 1 })), Number(el.dataset.index));
@@ -3336,11 +3347,6 @@ document.addEventListener('click', (ev) => {
     case 'search-toggle':
       document.body.classList.toggle('search-open');
       if (document.body.classList.contains('search-open')) searchInput.focus();
-      break;
-    case 'go-due':
-      if (location.hash && location.hash !== '#/') history.pushState(null, '', '#/');
-      route();
-      $('#due')?.scrollIntoView({ behavior: 'smooth' });
       break;
     case 'export':
       runAction(exportBackup);

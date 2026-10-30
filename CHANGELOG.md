@@ -6,6 +6,21 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.2.8] – 2026-10-30
+
+### Added
+- Phones: the car photo on the car page can be resized with + and − (small, medium, full width; remembered per
+  user).
+- Car page: neutral icons next to the headings "Reminders" and "History".
+- Entry types have their own neutral icons in the entry dialog, the history filters and the history entries.
+
+### Changed
+- Cost page: the "below each other" layout uses the sizes and spacing of the compact layout, so nothing jumps when
+  switching.
+
+### Removed
+- Phones: the "x due" badge in the top bar.
+
 ## [0.2.7] – 2026-10-30
 
 ### Added
@@ -169,7 +184,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.7...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/seals187/carMaint/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/seals187/carMaint/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/seals187/carMaint/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/seals187/carMaint/compare/v0.2.4...v0.2.5
