@@ -6,6 +6,17 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.2.10] – 2026-10-30
+
+### Added
+- Automatic server backups for admins (*Settings → Data*): daily at a set time or every x hours, number to keep,
+  list with download, restore and delete, and "Back up now". The schedule is stored on the server and works without a
+  restart. A restore replaces the data of all users; a safety backup is made first, so it can be undone. Disabled for
+  the demo user by default (`DEMO_DISABLED=password,backup`).
+
+### Changed
+- Phones: the documents button on the car cards has a border in the colour of the "+" button.
+
 ## [0.2.9] – 2026-10-30
 
 ### Added
@@ -201,7 +212,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.9...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.10...HEAD
+[0.2.10]: https://github.com/seals187/carMaint/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/seals187/carMaint/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/seals187/carMaint/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/seals187/carMaint/compare/v0.2.6...v0.2.7

@@ -180,6 +180,80 @@ routerAdd('POST', '/api/carmaint/notify/run', (e) => {
   return e.json(200, { sent: require(`${__hooks}/notify.js`).run(e.app, cfg, true) });
 }, $apis.requireAuth());
 
+// Automatic backups (pb_hooks/backup.js): the schedule is checked every minute
+cronAdd('carmaint-backup', '* * * * *', () => {
+  const backup = require(`${__hooks}/backup.js`);
+  const now = Date.now();
+  const last = $app.store().get('carmaintBackupCheck');
+  $app.store().set('carmaintBackupCheck', now);
+  if (!backup.dueBetween(backup.schedule($app), last, now)) return;
+  try {
+    backup.run($app);
+  } catch (err) {
+    $app.logger().error('CarMaint: automatic backup failed', 'error', String(err));
+  }
+});
+
+// Schedule and existing backups (admins only, settings page)
+routerAdd('GET', '/api/carmaint/backups', (e) => {
+  const backup = require(`${__hooks}/backup.js`);
+  backup.guard(require(`${__hooks}/config.js`), e.auth);
+  return e.json(200, { schedule: backup.schedule(e.app), intervals: backup.INTERVALS, keepMax: backup.KEEP_MAX, safetyPrefix: backup.SAFETY_PREFIX, backups: backup.list(e.app) });
+}, $apis.requireAuth());
+
+routerAdd('PUT', '/api/carmaint/backups/schedule', (e) => {
+  const backup = require(`${__hooks}/backup.js`);
+  backup.guard(require(`${__hooks}/config.js`), e.auth);
+  return e.json(200, backup.saveSchedule(e.app, e.requestInfo().body));
+}, $apis.requireAuth());
+
+// Back up now
+routerAdd('POST', '/api/carmaint/backups', (e) => {
+  const backup = require(`${__hooks}/backup.js`);
+  backup.guard(require(`${__hooks}/config.js`), e.auth);
+  try {
+    return e.json(200, { name: backup.run(e.app) });
+  } catch (err) {
+    e.app.logger().error('CarMaint: backup failed', 'error', String(err));
+    throw new BadRequestError(`Backup failed: ${String(err)}`);
+  }
+}, $apis.requireAuth());
+
+// Restore: on success the server restarts and the connection simply drops
+routerAdd('POST', '/api/carmaint/backups/{name}/restore', (e) => {
+  const backup = require(`${__hooks}/backup.js`);
+  backup.guard(require(`${__hooks}/config.js`), e.auth);
+  const name = e.request.pathValue('name');
+  if (!/^[\w@.-]+\.zip$/.test(name)) throw new BadRequestError('Invalid name.');
+  if (!backup.exists(e.app, name)) throw new NotFoundError();
+  try {
+    e.app.logger().warn('CarMaint: restoring a backup', 'name', name, 'user', e.auth.getString('username'));
+    backup.restore(e.app, name);
+  } catch (err) {
+    e.app.logger().error('CarMaint: restore failed', 'error', String(err));
+    throw new BadRequestError(`Restore failed: ${String(err)}`);
+  }
+  return e.noContent(204);
+}, $apis.requireAuth());
+
+routerAdd('DELETE', '/api/carmaint/backups/{name}', (e) => {
+  const backup = require(`${__hooks}/backup.js`);
+  backup.guard(require(`${__hooks}/config.js`), e.auth);
+  const name = e.request.pathValue('name');
+  if (!/^[\w@.-]+\.zip$/.test(name)) throw new BadRequestError('Invalid name.');
+  if (!backup.exists(e.app, name)) throw new NotFoundError();
+  backup.remove(e.app, name);
+  return e.noContent(204);
+}, $apis.requireAuth());
+
+routerAdd('GET', '/api/carmaint/backups/{name}', (e) => {
+  const backup = require(`${__hooks}/backup.js`);
+  backup.guard(require(`${__hooks}/config.js`), e.auth);
+  const name = e.request.pathValue('name');
+  if (!/^[\w@.-]+\.zip$/.test(name)) throw new BadRequestError('Invalid name.');
+  backup.serve(e.app, e, name);
+}, $apis.requireAuth());
+
 // Demo user: block disabled settings on the server, not only in the UI.
 // The username is locked too, otherwise renaming would lift the restrictions.
 onRecordUpdateRequest((e) => {

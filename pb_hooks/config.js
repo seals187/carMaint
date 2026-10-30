@@ -29,7 +29,7 @@ const allowedFileTypes = fileTypes.length ? fileTypes : [FILE_TYPES.pdf, FILE_TY
 const imageTypes = allowedFileTypes.filter((type) => type.startsWith('image/'));
 
 // Settings that can be disabled for the demo user
-const DEMO_OPTIONS = ['language', 'currency', 'infobox', 'export', 'import', 'password', 'notify'];
+const DEMO_OPTIONS = ['language', 'currency', 'infobox', 'export', 'import', 'password', 'notify', 'backup'];
 
 // E-mail reminders: only active when an SMTP server and a sender are set
 const smtpHost = env('SMTP_HOST');
@@ -81,5 +81,5 @@ module.exports = {
 
   demoUsername: env('DEMO_USERNAME'),
   demoPassword: env('DEMO_PASSWORD'),
-  demoDisabled: env('DEMO_DISABLED', 'password').toLowerCase().split(',').map((o) => o.trim()).filter((o) => DEMO_OPTIONS.includes(o)),
+  demoDisabled: env('DEMO_DISABLED', 'password,backup').toLowerCase().split(',').map((o) => o.trim()).filter((o) => DEMO_OPTIONS.includes(o)),
 };

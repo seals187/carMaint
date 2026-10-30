@@ -79,7 +79,8 @@ For access from the internet, put a reverse proxy with HTTPS in front (e.g. Cadd
   – time, days before, frequency and repeats are set per user under *Settings → Notifications*.
 - **Demo account:** `DEMO_USERNAME` / `DEMO_PASSWORD` create a restricted user on startup;
   `DEMO_DISABLED` hides settings such as *Change password* for it (see [`.env.example`](.env.example)).
-- **Backup:** *Settings → Backup* exports/imports all data of a user as one JSON file.
+- **Backup:** *Settings → Backup* exports/imports all data of a user as one JSON file. Admins can also schedule
+  automatic server backups there and restore them; they are stored in `pb_data/backups`, so copy them elsewhere as well.
   All server data is stored in the Docker volume `carmaint_data`.
 - **Update:** `docker compose pull && docker compose up -d`
 

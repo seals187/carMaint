@@ -262,6 +262,34 @@
     </form>
   </dialog>
 
+  <dialog id="restoreDialog" aria-labelledby="restoreDialogTitle">
+    <form method="dialog">
+      <h2 id="restoreDialogTitle" data-i18n="backup.restoreTitle"></h2>
+      <p class="restore-date" id="restoreDate"></p>
+      <p class="restore-warn" data-i18n="backup.restoreWarn"></p>
+      <ul class="restore-notes">
+        <li data-i18n="backup.restoreSafety"></li>
+        <li data-i18n="backup.restoreRestart"></li>
+      </ul>
+      <div class="dialog-actions">
+        <button type="button" class="btn ghost" data-close data-i18n="btn.cancel"></button>
+        <button type="submit" class="btn danger" value="confirm" data-i18n="backup.restore"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="backupDeleteDialog" aria-labelledby="backupDeleteTitle">
+    <form method="dialog">
+      <h2 id="backupDeleteTitle" data-i18n="backup.deleteTitle"></h2>
+      <p class="restore-date" id="backupDeleteDate"></p>
+      <p class="restore-warn" data-i18n="backup.deleteWarn"></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn ghost" data-close data-i18n="btn.cancel"></button>
+        <button type="submit" class="btn danger" value="confirm" data-i18n="btn.delete"></button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="docsDialog" aria-labelledby="docsDialogTitle">
     <div class="dialog-body">
       <h2 id="docsDialogTitle"></h2>

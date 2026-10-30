@@ -200,6 +200,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn:active { transform: scale(.97); }
 .btn.primary { background: var(--accent); color: #fff; }
 .btn.primary:hover { background: var(--accent-hover); }
+/* Darkened, so the white text stays readable on the lighter red of the dark theme */
+.btn.danger { background: color-mix(in srgb, var(--danger) 78%, #000); color: #fff; }
+.btn.danger:hover { background: color-mix(in srgb, var(--danger) 66%, #000); }
 .btn.ghost { background: transparent; border-color: var(--border); }
 .btn.ghost:hover { background: var(--surface-2); }
 
@@ -615,6 +618,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .setting + .setting { border-top: 1px solid var(--border); }
 .setting h3 { font-size: 1rem; margin-bottom: 2px; }
 .setting .grow { flex: 1; min-width: 0; }
+.setting[hidden] { display: none; }
+#backupForm + .setting { border-top: 1px solid var(--border); }
+input.text-input.backup-keep { width: 80px; }
+.backup-list { display: flex; flex-direction: column; gap: 2px; margin: -8px 0 12px; padding: 0; list-style: none; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.backup-list li { display: flex; align-items: center; gap: 12px; }
+.backup-list li { gap: 4px; }
+.backup-list .backup-size { margin-left: auto; padding-right: 8px; white-space: nowrap; }
+.backup-list small { display: block; }
+.restore-date { margin: -8px 0 0; color: var(--muted); }
+.restore-warn {
+  margin: 0; padding: 10px 12px; border-radius: 10px; font-weight: 600;
+  background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger);
+}
+.restore-notes { margin: 0; padding-left: 18px; font-size: .9rem; color: var(--muted); }
+.restore-notes li + li { margin-top: 4px; }
 .meter { height: 6px; margin-top: 10px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 .meter[hidden] { display: none; }
 .meter span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .3s; }
@@ -1267,7 +1285,7 @@ dialog.sheet { width: min(460px, calc(100% - 32px)); }
   /* Buttons sit at the bottom right of the photo (16:10), so the name keeps the full width */
   .car-card .card-actions { position: absolute; top: calc(100cqw * 10 / 16 - 38px); right: 6px; z-index: 2; display: flex; gap: 6px; }
   .car-card .quick-add, .car-card .sm-btn { width: 32px; height: 32px; padding: 0; justify-content: center; box-shadow: 0 2px 8px rgb(0 0 0 / .25); }
-  .car-card .quick-add { background: var(--surface); }
+  .car-card .quick-add { border: 1px solid var(--accent); background: var(--surface); }
   .car-card .sm-btn span { display: none; } /* the button keeps its aria-label */
   .car-card .stats { flex-direction: column; gap: 0; padding: 4px 8px; border-radius: 10px; background: var(--surface-2); }
   .car-card .stats div { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; padding: 2px 0; background: none; border-radius: 0; }

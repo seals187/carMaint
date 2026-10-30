@@ -1127,6 +1127,8 @@ async function sendTestNotification() {
   toast(t('notify.testSent', { to: [email, n.push.url].filter(Boolean).join(' · ') }));
 }
 
+const backupsAllowed = () => isAdmin() && allowed('backup');
+
 function dataSection() {
   const backup = [
     allowed('export') && `<button class="btn ghost" data-action="export">${icon('download')}${t('btn.export')}</button>`,
@@ -1142,7 +1144,127 @@ function dataSection() {
         </div>
       </div>
       ${backup ? settingRow(t('settings.backup'), t('settings.backupHint'), `<div class="setting-actions">${backup}</div>`) : ''}
-    </div>`;
+    </div>
+    ${backupsAllowed() ? `
+    <div class="section-head"><h2>${t('backup.title')}</h2></div>
+    <div class="card settings" id="backupCard"><p class="muted small center">${t('backup.loading')}</p></div>` : ''}`;
+}
+
+// Automatic server backups (admins only)
+async function renderBackups() {
+  const card = $('#backupCard');
+  try {
+    const { schedule: s, intervals, keepMax, safetyPrefix, backups } = await api('GET', '/api/carmaint/backups');
+    if (!card.isConnected) return;
+    const hours = intervals.map((h) => `<option value="${h}" ${h === s.hours ? 'selected' : ''}>${esc(tn('backup.hours', h))}</option>`).join('');
+    const row = backups.map((b) => {
+      const date = new Date(b.modified * 1000).toLocaleString(locale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return `
+      <li>
+        <span>${esc(date)}${b.name.startsWith(safetyPrefix) ? ` <small class="muted">${t('backup.safety')}</small>` : ''}</span>
+        <span class="backup-size muted">${fmtMB(b.size)}</span>
+        <button class="icon-btn sm" data-action="backup-restore" data-name="${esc(b.name)}" data-date="${esc(date)}" title="${t('backup.restore')}" aria-label="${esc(`${t('backup.restore')}: ${date}`)}">${icon('history')}</button>
+        <button class="icon-btn sm" data-action="backup-download" data-name="${esc(b.name)}" title="${t('backup.download')}" aria-label="${esc(`${t('backup.download')}: ${date}`)}">${icon('download')}</button>
+        <button class="icon-btn sm danger" data-action="backup-delete" data-name="${esc(b.name)}" data-date="${esc(date)}" title="${t('btn.delete')}" aria-label="${esc(`${t('btn.delete')}: ${date}`)}">${icon('trash')}</button>
+      </li>`;
+    }).join('');
+    card.innerHTML = `
+      <form id="backupForm" novalidate>
+        ${settingRow(t('backup.schedule'), `${t('backup.hint')} ${t('notify.timeZone', { zone: esc(serverConfig.notify?.timeZone ?? '') })}`,
+          segmented('backupMode', t('backup.schedule'), { off: t('backup.mode.off'), daily: t('backup.mode.daily'), hours: t('backup.mode.hours') }, s.mode))}
+        <div class="setting" id="backupDaily" ${s.mode === 'daily' ? '' : 'hidden'}>
+          <div><h3>${t('backup.time')}</h3></div>
+          <input type="time" class="text-input" name="backupTime" value="${esc(s.time)}" aria-label="${t('backup.time')}">
+        </div>
+        <div class="setting" id="backupHours" ${s.mode === 'hours' ? '' : 'hidden'}>
+          <div><h3>${t('backup.interval')}</h3></div>
+          <select class="text-input" name="backupHours" aria-label="${t('backup.interval')}">${hours}</select>
+        </div>
+        ${settingRow(t('backup.keep'), t('backup.keepHint'), `<input type="number" class="text-input backup-keep" name="backupKeep" min="1" max="${keepMax}" value="${s.keep}" aria-label="${t('backup.keep')}">`)}
+      </form>
+      ${settingRow(t('backup.list'), backups.length ? '' : t('backup.none'), `<button class="btn ghost" data-action="backup-now">${icon('database')}${t('backup.now')}</button>`)}
+      ${row ? `<ul class="backup-list">${row}</ul>` : ''}`;
+  } catch (err) {
+    console.warn('Backups could not be loaded', err);
+    if (card.isConnected) card.innerHTML = `<p class="muted small center">${t('backup.loadError')}</p>`;
+  }
+}
+
+document.addEventListener('change', (ev) => {
+  const form = ev.target.closest('#backupForm');
+  if (!form) return;
+  const f = new FormData(form);
+  const mode = f.get('backupMode');
+  $('#backupDaily').hidden = mode !== 'daily';
+  $('#backupHours').hidden = mode !== 'hours';
+  runAction(async () => {
+    const s = await api('PUT', '/api/carmaint/backups/schedule', { mode, time: f.get('backupTime'), hours: Number(f.get('backupHours')), keep: Number(f.get('backupKeep')) });
+    form.elements.namedItem('backupKeep').value = s.keep;
+    toast(t('backup.saved'));
+  });
+});
+
+async function createBackup(button) {
+  button.disabled = true;
+  toast(t('backup.running'), 0);
+  try {
+    await api('POST', '/api/carmaint/backups');
+    await renderBackups();
+    toast(t('backup.done'));
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// Resolves to true when the dialog was closed with its confirm button
+function confirmDialog(dialog) {
+  dialog.returnValue = '';
+  showDialog(dialog);
+  return new Promise((resolve) => {
+    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true });
+  });
+}
+
+async function deleteBackup(name, date) {
+  $('#backupDeleteDate').textContent = t('backup.restoreFrom', { date });
+  if (!await confirmDialog($('#backupDeleteDialog'))) return;
+  await api('DELETE', `/api/carmaint/backups/${encodeURIComponent(name)}`);
+  await renderBackups();
+  toast(t('backup.deleted'));
+}
+
+// The server restarts when done, so a dropped connection is the normal case:
+// wait until it answers again, then load everything fresh.
+async function restoreBackup(name, date) {
+  $('#restoreDate').textContent = t('backup.restoreFrom', { date });
+  if (!await confirmDialog($('#restoreDialog'))) return;
+  toast(t('backup.restoring'), 0);
+  try {
+    await api('POST', `/api/carmaint/backups/${encodeURIComponent(name)}/restore`);
+  } catch (err) {
+    if (err.status !== 0) throw err;
+  }
+  for (let i = 0; i < 120; i += 1) {
+    await new Promise((done) => { setTimeout(done, 1000); });
+    const up = await fetch('/api/health').then((res) => res.ok).catch(() => false);
+    if (up) {
+      location.reload();
+      return;
+    }
+  }
+  throw new Error(t('backup.restoreTimeout'));
+}
+
+async function downloadBackup(name) {
+  toast(t('backup.preparing'), 0);
+  const res = await fetch(`/api/carmaint/backups/${encodeURIComponent(name)}`, { headers: { Authorization: auth.token } });
+  if (!res.ok) throw new ApiError(res.status);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(await res.blob());
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(t('backup.downloaded'));
 }
 
 function accountSection() {
@@ -1189,6 +1311,7 @@ function renderSettings(sectionKey) {
     ${settingsFooter()}`;
 
   if (section.key === 'data') renderStorage();
+  if (section.key === 'data' && backupsAllowed()) renderBackups();
   if (section.key === 'admin') renderUsers();
   if (section.key === 'notify') updateNotifyPreview();
 }
@@ -3018,7 +3141,7 @@ userForm.addEventListener('submit', (ev) => {
   });
 });
 
-for (const dialog of [carDialog, entryDialog, infoDialog, userDialog, passwordDialog, docsDialog, reminderDialog, docDialog, quickDialog, lightbox]) {
+for (const dialog of [carDialog, entryDialog, infoDialog, userDialog, passwordDialog, docsDialog, reminderDialog, docDialog, quickDialog, lightbox, $('#restoreDialog'), $('#backupDeleteDialog')]) {
   dialog.addEventListener('click', (ev) => {
     if (ev.target === dialog || ev.target.closest('[data-close]')) dialog.close();
   });
@@ -3347,6 +3470,18 @@ document.addEventListener('click', (ev) => {
     case 'search-toggle':
       document.body.classList.toggle('search-open');
       if (document.body.classList.contains('search-open')) searchInput.focus();
+      break;
+    case 'backup-now':
+      runAction(() => createBackup(el));
+      break;
+    case 'backup-restore':
+      runAction(() => restoreBackup(el.dataset.name, el.dataset.date));
+      break;
+    case 'backup-delete':
+      runAction(() => deleteBackup(el.dataset.name, el.dataset.date));
+      break;
+    case 'backup-download':
+      runAction(() => downloadBackup(el.dataset.name));
       break;
     case 'export':
       runAction(exportBackup);
