@@ -1451,11 +1451,13 @@ function renderCarPhone(car) {
   const info = car.info ?? {};
   const fields = INFO_FIELDS.filter((f) => info[f.key] != null && info[f.key] !== '').length;
   const tiles = [
-    ['info', 'car', t('info.title'), tn('info.fieldCount', fields)],
+    ['info', 'car', t('info.short'), fields],
     ['photos', 'image', t('photos.title'), photos.length],
     ['docs', 'file', t('docs.title'), documentsFor(car.id).length],
   ];
   const panel = { info: () => infoBox(car), photos: () => photoSection(car), docs: () => docSection(car) }[phonePanel];
+  const states = remindersFor(car.id).sort(bySoonest);
+  const remCollapsed = !!settings.remCollapsed;
 
   $('#app').innerHTML = `
     <div class="car-bar">
@@ -1496,11 +1498,15 @@ function renderCarPhone(car) {
     </div>
     ${panel ? `<div class="card phone-panel">${panel()}</div>` : ''}
 
-    <div class="section-head">
-      <h2>${t('rem.title')}</h2>
-      <button class="link-btn push-right" data-action="add-reminder" data-id="${id}">${icon('plus')}${t('rem.addShort')}</button>
-    </div>
-    ${reminderPanel(car, true)}
+    <section class="phone-rem${remCollapsed ? ' collapsed' : ''}">
+      <div class="section-head">
+        <button class="rem-toggle" data-action="toggle-reminders" aria-expanded="${!remCollapsed}">
+          <h2>${t('rem.title')}</h2>${states.length ? `<span class="count-pill" data-level="${states[0].level}">${states.length}</span>` : ''}${icon('chevronDown')}
+        </button>
+        <button class="link-btn push-right" data-action="add-reminder" data-id="${id}">${icon('plus')}${t('rem.addShort')}</button>
+      </div>
+      ${reminderPanel(car, true)}
+    </section>
 
     <div class="section-head history-head"><h2>${t('history.title')}</h2></div>
     ${historyFilters(history)}
@@ -3160,6 +3166,13 @@ document.addEventListener('click', (ev) => {
       const box = $('#infobox');
       box.classList.toggle('collapsed', infoCollapsed);
       box.querySelector('.info-toggle').setAttribute('aria-expanded', !infoCollapsed);
+      break;
+    }
+    case 'toggle-reminders': {
+      const collapsed = !settings.remCollapsed;
+      saveSettings({ remCollapsed: collapsed });
+      el.closest('.phone-rem').classList.toggle('collapsed', collapsed);
+      el.setAttribute('aria-expanded', !collapsed);
       break;
     }
     case 'phone-panel': {
