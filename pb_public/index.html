@@ -274,8 +274,17 @@
   </dialog>
 
   <dialog id="lightbox" class="lightbox">
-    <img id="lbImg" alt="">
-    <button class="icon-btn lb-btn lb-close" data-close data-icon="x" data-i18n-aria="lb.close"></button>
+    <div class="lb-stage" id="lbStage"></div>
+    <div class="lb-bar">
+      <p class="lb-title"><strong id="lbName"></strong><span id="lbPage"></span></p>
+      <div class="lb-tools">
+        <button class="icon-btn lb-btn lb-zoom-btn" data-lb-zoom="-1" data-icon="minus" data-i18n-aria="lb.zoomOut" data-i18n-title="lb.zoomOut"></button>
+        <button class="lb-btn lb-zoom" id="lbZoom" data-lb-zoom="0" data-i18n-title="lb.zoomReset">100 %</button>
+        <button class="icon-btn lb-btn lb-zoom-btn" data-lb-zoom="1" data-icon="plus" data-i18n-aria="lb.zoomIn" data-i18n-title="lb.zoomIn"></button>
+        <button class="icon-btn lb-btn" id="lbDownload" data-icon="download" data-i18n-aria="lb.download" data-i18n-title="lb.download"></button>
+        <button class="icon-btn lb-btn" data-close data-icon="x" data-i18n-aria="lb.close" data-i18n-title="lb.close"></button>
+      </div>
+    </div>
     <button class="icon-btn lb-btn lb-prev" data-lb="-1" data-icon="chevronLeft" data-i18n-aria="lb.prev"></button>
     <button class="icon-btn lb-btn lb-next" data-lb="1" data-icon="chevronRight" data-i18n-aria="lb.next"></button>
     <p id="lbCaption"></p>

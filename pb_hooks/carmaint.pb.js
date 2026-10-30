@@ -206,6 +206,36 @@ const checkStorageLimit = (e) => {
 onRecordCreateRequest(checkStorageLimit, 'cars', 'entries', 'documents');
 onRecordUpdateRequest(checkStorageLimit, 'cars', 'entries', 'documents');
 
+// PDF previews and file sizes of receipts and documents (pb_hooks/previews.js): updated
+// right after every save, using a fresh copy of the record.
+const syncPreviews = (e) => {
+  e.next();
+  try {
+    const record = e.app.findRecordById(e.record.collection().name, e.record.id);
+    require(`${__hooks}/previews.js`).sync(e.app, record);
+  } catch (err) {
+    e.app.logger().error('CarMaint: PDF previews could not be updated', 'record', e.record.id, 'error', String(err));
+  }
+};
+onRecordAfterCreateSuccess(syncPreviews, 'entries', 'documents');
+onRecordAfterUpdateSuccess(syncPreviews, 'entries', 'documents');
+
+// Previews and file info are written by the server only.
+const lockPreviews = (e) => {
+  const body = e.requestInfo().body;
+  if (Object.keys(body).some((key) => key.startsWith('previews') || key === 'fileInfo')) {
+    throw new ForbiddenError('Previews are created by the server.');
+  }
+  return e.next();
+};
+onRecordCreateRequest(lockPreviews, 'entries', 'documents');
+onRecordUpdateRequest(lockPreviews, 'entries', 'documents');
+
+// Catches up on missing previews (existing PDFs after an update)
+cronAdd('carmaint-previews', '*/10 * * * *', () => {
+  require(`${__hooks}/previews.js`).backfill($app);
+});
+
 // Storage used by the signed-in user (settings page)
 routerAdd('GET', '/api/carmaint/usage', (e) => {
   const cfg = require(`${__hooks}/config.js`);

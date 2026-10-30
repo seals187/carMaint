@@ -6,6 +6,18 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.2.2] – 2026-10-30
+
+### Added
+- PDF previews: the server renders the first 5 pages of PDF receipts and documents (poppler in the Docker image), so a click on a receipt shows them in the viewer in every browser, phones included. Existing PDFs get their previews within a few minutes after the update
+- Cost analysis per car or for all vehicles (click “Costs 20xx” on the car page, the yearly costs on a car card or the total on the overview): totals compared with the same period of the previous year, average per month, cost per km, projection for the year; “Where does the money go?” bar; bars per month by type or as total with the previous year behind, the average and an estimate for the rest of the year; table per type with a link to the filtered history. All years: running costs since purchase, average per full year, total including the purchase price, bars per year. All vehicles: costs per vehicle and bars by vehicle. Compact layout with the table next to the chart (fits on one screen); a switch shows everything below each other instead
+- New viewer for photos, images and PDFs: page counter, zoom (buttons or +/−/0), download, arrow keys to switch between the files of an entry; PDFs with more than 5 pages link to the original
+
+### Changed
+- Documents without a photo show the first page of their PDF as preview
+- History: dates always with the year (19.10.2026)
+- Docker image: about 40 MB larger because of poppler and the Liberation fonts
+
 ## [0.2.1] – 2026-10-21
 
 ### Added
@@ -116,7 +128,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/seals187/carMaint/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/seals187/carMaint/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/seals187/carMaint/compare/v0.1.7...v0.2.0
 [0.1.7]: https://github.com/seals187/carMaint/compare/v0.1.6...v0.1.7

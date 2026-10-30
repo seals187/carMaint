@@ -7,8 +7,10 @@ ARG TARGETARCH
 # CarMaint version, set by the GitHub workflow (e.g. 0.1.0 or edge)
 ARG VERSION=dev
 
+# poppler-utils renders the PDF previews (pdfinfo, pdftoppm); font-liberation replaces
+# the standard PDF fonts (Helvetica, Times, Courier) that are often not embedded
 RUN set -eux; \
-    apk add --no-cache ca-certificates tzdata wget unzip; \
+    apk add --no-cache ca-certificates tzdata wget unzip poppler-utils font-liberation; \
     arch="${TARGETARCH:-$(uname -m)}"; \
     case "$arch" in \
       amd64|x86_64)  arch=amd64 ;; \

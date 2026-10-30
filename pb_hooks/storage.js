@@ -1,7 +1,7 @@
 /// <reference path="../pb_data/types.d.ts" />
 
 // Storage used by a user: the original photos, receipts and documents of all
-// their cars (thumbnails are not counted). Loaded via require() from the hooks.
+// their cars (thumbnails and PDF previews are not counted). Loaded via require() from the hooks.
 
 const FILE_FIELDS = { cars: 'photos', entries: 'attachments', documents: 'attachments' };
 

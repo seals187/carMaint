@@ -70,6 +70,9 @@ const ICONS = {
   star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   minus: '<path d="M5 12h14"/>',
+  columns: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/>',
+  rows: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 12h18"/>',
+  external: '<path d="M7 7h10v10"/><path d="M7 17 17 7"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
   user: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
@@ -423,12 +426,12 @@ function dataUrlToBlob(url) {
   return new Blob([bytes], { type: head.match(/^data:([^;,]*)/)?.[1] ?? '' });
 }
 
-function openFile(url, name) {
+function openFile(url, name, download = !/\.pdf$/i.test(name)) {
   const a = document.createElement('a');
   a.href = url;
   a.target = '_blank';
   a.rel = 'noopener';
-  if (!/\.pdf$/i.test(name)) a.download = name; // open PDFs in a new tab, download everything else
+  if (download) a.download = name; // open PDFs in a new tab, download everything else
   a.click();
 }
 
@@ -450,17 +453,41 @@ const entryById = (id) => db.entries.find((e) => e.id === id);
 const reminderById = (id) => db.reminders.find((r) => r.id === id);
 const documentById = (id) => db.documents.find((d) => d.id === id);
 
-// Shows a file of an entry or document: images in the viewer (together with the
-// other images), PDFs in a new tab. Without a name: the first image or file.
+// Size, page count and preview pages of an attachment (created by the server)
+const fileMeta = (record, name) => record?.fileInfo?.[name] ?? {};
+const previewsOf = (record, name) => (fileMeta(record, name).previews ?? []).filter((p) => record.previews?.includes(p));
+
+// An attachment for the viewer: images as one page, PDFs with their preview pages
+function viewerItem(record, pathOf, name) {
+  const image = isImageName(name);
+  const pages = image ? [name] : previewsOf(record, name);
+  if (!pages.length) return null;
+  return {
+    name: attachmentLabel(record, name), file: pathOf(record, name), pdf: !image,
+    pages: pages.map((p) => pathOf(record, p)), total: image ? 1 : fileMeta(record, name).pages || pages.length,
+  };
+}
+
+// Shows a file of an entry or document in the viewer, together with the other
+// files that have a preview; PDFs without a preview open in a new tab.
+// Without a name: the first file.
 async function viewFiles(record, pathOf, name = null) {
-  const target = name ?? record?.attachments.find(isImageName) ?? record?.attachments[0];
+  const names = record?.attachments.filter((n) => viewerItem(record, pathOf, n)) ?? [];
+  const target = name ?? names[0] ?? record?.attachments[0];
   if (!target) return;
-  if (isImageName(target)) {
-    const images = record.attachments.filter(isImageName);
-    openLightbox(images.map((n) => pathOf(record, n)), images.indexOf(target));
+  if (names.includes(target)) {
+    openLightbox(names.map((n) => viewerItem(record, pathOf, n)), names.indexOf(target));
   } else {
     openFile(await fileObjectUrl(pathOf(record, target)), attachmentLabel(record, target));
   }
+}
+
+// Cover of a record: the first image, otherwise the first page of the first PDF
+function coverOf(record, pathOf) {
+  const image = record.attachments.find(isImageName);
+  if (image) return { path: pathOf(record, image), thumb: '300x225' };
+  const preview = record.attachments.map((n) => previewsOf(record, n)[0]).find(Boolean);
+  return preview ? { path: pathOf(record, preview), thumb: '300x225t' } : null;
 }
 const sum = (list) => list.reduce((total, e) => total + (Number(e.cost) || 0), 0);
 const entriesFor = (carId) => db.entries
@@ -733,16 +760,24 @@ const openEntries = new Set(); // expanded rows in the history
 
 function route() {
   if (!auth) return renderLogin();
-  const [, view, id] = location.hash.split('/');
+  const [, view, id, type] = location.hash.split('/');
   const car = view === 'car' ? carById(id) : null;
   if (view === 'settings') {
     currentCarId = null;
     renderSettings(id);
+  } else if (view === 'costs') {
+    currentCarId = null;
+    renderCosts(carById(id));
   } else if (car) {
     if (car.id !== currentCarId) {
       filter = { type: 'all' };
       // With an own choice of fields only those are shown at first
       infoCollapsed = defaultInfoCollapsed() || Array.isArray(car.info?.pinned);
+    }
+    // #/car/<id>/<type> (from the cost table): history filtered by that type
+    if (ENTRY_TYPES.includes(type)) {
+      filter = { type };
+      history.replaceState(null, '', `#/car/${car.id}`);
     }
     currentCarId = car.id;
     renderCar(car);
@@ -752,7 +787,7 @@ function route() {
   }
   renderDuePill();
   // A different page starts at the top; re-rendering the same page keeps the position
-  const page = view === 'car' && car ? `car/${car.id}` : view === 'settings' ? `settings/${id ?? ''}` : 'home';
+  const page = view === 'car' && car ? `car/${car.id}` : view === 'settings' || view === 'costs' ? `${view}/${id ?? ''}` : 'home';
   if (page !== lastPage) window.scrollTo(0, 0);
   lastPage = page;
   hydrate();
@@ -782,7 +817,7 @@ function renderHome() {
   const perKm = costPerKm(db.cars);
   const summary = [
     tn('count.cars', db.cars.length),
-    t('home.yearSoFar', { year: thisYear(), amount: `<strong>${money.format(costThisYear(db.entries))}</strong>` }),
+    `<a class="cost-link home-cost" href="#/costs" title="${t('costs.show')}">${t('home.yearSoFar', { year: thisYear(), amount: `<strong>${money.format(costThisYear(db.entries))}</strong>` })}${icon('chevronRight')}</a>`,
     perKm !== null && t('home.perKm', { amount: money.format(perKm) }),
   ].filter(Boolean).join(' · ');
   const due = allReminders().filter((s) => s.level !== 'later');
@@ -1279,7 +1314,7 @@ function carCard(car) {
         </div>
         <dl class="stats">
           <div><dt>${t('stats.km')}</dt><dd>${car.mileage ? fmtNum(car.mileage) : '–'}</dd></div>
-          <div><dt>${thisYear()} · ${esc(currencySymbol())}</dt><dd>${fmtNum(Math.round(costThisYear(entries)))}</dd></div>
+          <div class="cost-stat"><dt>${thisYear()} · ${esc(currencySymbol())}</dt><dd><a class="cost-link" href="#/costs/${esc(car.id)}" title="${t('costs.show')}">${fmtNum(Math.round(costThisYear(entries)))}</a></dd></div>
           <div><dt>${t('stats.perKm')}</dt><dd>${perKm === null ? '–' : fmtNum(perKm, 2)}</dd></div>
         </dl>
         <div class="card-foot">${foot}</div>
@@ -1297,8 +1332,9 @@ function renderCar(car) {
   const id = esc(car.id);
   const perKm = costPerKm([car]);
   const sub = [car.year, car.plate].filter(Boolean).map(esc).join(' · ');
-  const tile = (label, value, extra = '') =>
-    `<div class="card tile"><div><span>${label}</span><strong>${value}</strong></div>${extra}</div>`;
+  const tile = (label, value, extra = '', href = '') => (href
+    ? `<a class="card tile tile-link" href="${href}" title="${t('costs.show')}"><div><span>${label}</span><strong>${value}</strong></div>${extra}${icon('chevronRight')}</a>`
+    : `<div class="card tile"><div><span>${label}</span><strong>${value}</strong></div>${extra}</div>`);
 
   $('#app').innerHTML = `
     <a href="#/" class="back">${icon('back')}${t('nav.back')}</a>
@@ -1354,7 +1390,7 @@ function renderCar(car) {
       <div class="car-main">
         <div class="tiles">
           ${tile(t('stats.km'), car.mileage ? fmtNum(car.mileage) : '–')}
-          ${tile(t('tile.costYear', { year: thisYear() }), money0.format(costThisYear(entries)), costSpark(entries))}
+          ${tile(t('tile.costYear', { year: thisYear() }), money0.format(costThisYear(entries)), costSpark(entries), `#/costs/${id}`)}
           ${tile(t('stats.perKm'), perKm === null ? '–' : fmtNum(perKm, 2))}
         </div>
 
@@ -1401,6 +1437,369 @@ function costSpark(entries) {
     </div>`;
 }
 
+/* ---------- Cost analysis (#/costs, #/costs/<car>) ---------- */
+
+// Stack order of the charts: chosen so that neighbouring colours stay apart
+// for colour-blind readers too (fuel, service, inspection, tyres, repair, other).
+const COST_TYPES = ['fuel', 'service', 'inspection', 'tires', 'repair', 'other'];
+const costType = (e) => (COST_TYPES.includes(e.type) ? e.type : 'other');
+const CAR_SLOTS = 5; // own colours for the first five vehicles, the rest is "others"
+const costView = { year: null, mode: 'type' };
+let costBuckets = []; // bars of the current chart, for the tooltip
+
+const byType = (entries) => Object.fromEntries(COST_TYPES.map((type) => [type, sum(entries.filter((e) => costType(e) === type))]));
+const monthLabel = (month, style = 'short') => asDate(`2000-${String(month).padStart(2, '0')}-01`)
+  .toLocaleDateString(locale(), { month: style }).replace(/\.$/, '');
+const monthRange = (to) => (to > 1 ? `${monthLabel(1)}–${monthLabel(to)}` : monthLabel(1));
+const typeSeries = (type) => ({ attr: `data-color="${TYPES[type].color}"`, label: typeLabel(type) });
+const carSlot = (car) => Math.min(CAR_SLOTS, db.cars.indexOf(car));
+const carSeries = (slot) => ({ attr: `data-car="${slot}"`, label: slot >= CAR_SLOTS ? t('costs.otherCars') : db.cars[slot] ? carName(db.cars[slot]) : '' });
+
+// "−322" in green (cheaper) or "+60" in red
+const signed = (d) => {
+  const v = Math.round(d);
+  return `<span class="${v > 0 ? 'bad' : v < 0 ? 'good' : 'muted'}">${v > 0 ? '+' : v < 0 ? '−' : '±'}${fmtNum(Math.abs(v))}</span>`;
+};
+
+// Kilometres covered in the period, per car from the recorded mileages
+function kmInPeriod(cars, entries, year) {
+  let driven = 0;
+  for (const car of cars) {
+    const values = entries.filter((e) => e.car === car.id).map((e) => e.mileage).filter(Boolean);
+    if (car.mileage && (year === 'all' || year === thisYear())) values.push(car.mileage);
+    if (values.length > 1) driven += Math.max(...values) - Math.min(...values);
+  }
+  return driven;
+}
+
+// Grid step: 1, 2, 2.5 or 5 × 10^n, about two lines per chart
+function gridStep(max) {
+  const raw = max / 2 || 1;
+  const base = 10 ** Math.floor(Math.log10(raw));
+  return [5, 2.5, 2, 1].map((f) => f * base).find((v) => v <= raw);
+}
+
+function renderCosts(car) {
+  const cars = car ? [car] : db.cars;
+  const ids = new Set(cars.map((c) => c.id));
+  const entries = db.entries.filter((e) => ids.has(e.car) && e.type !== 'documents' && Number(e.cost) > 0);
+  const now = thisYear();
+  const years = [...new Set([now, ...entries.map((e) => e.date.slice(0, 4))])].sort();
+  if (costView.year !== 'all' && !years.includes(costView.year)) costView.year = now;
+  const year = costView.year;
+  const shown = years.slice(-3);
+  // Compact with the table next to the chart, or everything below each other
+  const layout = settings.costLayout === 'stacked' ? 'stacked' : 'split';
+  if (year !== 'all' && !shown.includes(year)) shown.splice(0, 1, year);
+
+  $('#app').innerHTML = `
+    ${car
+      ? `<a href="#/car/${esc(car.id)}" class="back">${icon('back')}${esc(carName(car))}</a>`
+      : `<a href="#/" class="back">${icon('back')}${t('nav.back')}</a>`}
+    <div class="costs-head">
+      <div class="costs-title">
+        <h1>${t('costs.title')}${car ? '' : ` · ${t('costs.allCarsLower')}`}</h1>
+        ${car && db.cars.length > 1 ? `<a class="link-btn accent" href="#/costs">${t('nav.back')}${icon('chevronRight')}</a>` : ''}
+      </div>
+      <div class="costs-controls">
+        ${segmented('costYear', t('costs.yearAria'), [...shown.map((y) => [y, y]), ['all', t('costs.allYears')]], year)}
+        <div class="layout-toggle" role="group" aria-label="${t('costs.layout')}">
+          ${[['split', 'columns'], ['stacked', 'rows']].map(([value, iconName]) => `
+            <button class="icon-btn sm" data-action="cost-layout" data-layout="${value}" aria-pressed="${layout === value}"
+              title="${t(`costs.layout.${value}`)}" aria-label="${t(`costs.layout.${value}`)}">${icon(iconName)}</button>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="costs${layout === 'split' ? ' split' : ''}">
+      ${!entries.length ? emptyState('wrench', t('costs.emptyTitle'), t('costs.emptyText'))
+        : year === 'all' ? costsAllYears(car, cars, entries) : costsYear(car, cars, entries, year)}
+    </div>`;
+}
+
+const costTile = (label, value, sub, cls = '') =>
+  `<div class="card tile${cls ? ` ${cls}` : ''}"><div><span>${label}</span><strong>${value}</strong>${sub ? `<small class="muted">${sub}</small>` : ''}</div></div>`;
+
+// One year: key figures, shares, bars per month and the table per type
+function costsYear(car, cars, entries, year) {
+  const now = thisYear();
+  const current = year === now;
+  const months = current ? Number(today().slice(5, 7)) : 12;
+  const until = `${year}-${String(months).padStart(2, '0')}-31`;
+  const period = entries.filter((e) => e.date.startsWith(year));
+  const prevYear = String(Number(year) - 1);
+  // Compared with the same months of the previous year
+  const prevSame = entries.filter((e) => e.date.startsWith(prevYear) && e.date <= `${prevYear}${until.slice(4)}`);
+  const prevAll = entries.filter((e) => e.date.startsWith(prevYear));
+  const hasPrev = prevAll.length > 0;
+  const total = sum(period);
+  const types = byType(period);
+  const avg = total / months;
+  const driven = kmInPeriod(cars, period, year);
+  const range = monthRange(months);
+  const compare = current ? `${range} ${prevYear}` : prevYear;
+
+  const tiles = `
+    <div class="tiles costs-tiles">
+      ${costTile(t('costs.total', { year }), money0.format(total), car
+        ? (hasPrev ? `${signed(total - sum(prevSame))} ${esc(t('costs.vs', { period: compare }))}` : '')
+        : esc(tn('count.cars', cars.length)))}
+      ${costTile(t('costs.avgPerMonth'), money0.format(avg), esc(range))}
+      ${costTile(t('stats.perKm'), driven >= 100 ? money.format(total / driven) : '–', driven >= 100 ? esc(t('costs.kmDriven', { km: km(driven) })) : '')}
+      ${current && months < 12
+        ? costTile(t('costs.projection', { year }), money0.format(avg * 12), esc(t('costs.projectionSub')), 'accent')
+        : costTile(t('costs.noFuel'), money0.format(total - types.fuel), esc(t('costs.noFuelSub')))}
+    </div>`;
+
+  // Bars per month: by type (one car) or by vehicle (all), the previous year behind
+  const typeMode = !car || costView.mode === 'type';
+  const prevMonth = (key) => sum(prevAll.filter((e) => e.date.slice(5, 7) === key.slice(5)));
+  const buckets = Array.from({ length: 12 }, (_, i) => {
+    const key = `${year}-${String(i + 1).padStart(2, '0')}`;
+    const list = period.filter((e) => e.date.startsWith(key));
+    const future = i + 1 > months;
+    const parts = car
+      ? COST_TYPES.map((type) => ({ ...typeSeries(type), value: sum(list.filter((e) => costType(e) === type)) }))
+      : Array.from({ length: CAR_SLOTS + 1 }, (_, slot) => ({ ...carSeries(slot), value: sum(list.filter((e) => carSlot(carById(e.car)) === slot)) }));
+    const b = { label: monthLabel(i + 1, 'narrow'), long: `${monthLabel(i + 1, 'long')} ${year}`, parts: parts.filter((p) => p.value), total: sum(list), future };
+    if (car && hasPrev) b.prev = prevMonth(key);
+    // Estimate for the rest of the year (total view)
+    if (car && !typeMode && future && current) b.estimate = avg;
+    // Outliers: a month far above the average, mostly one type
+    const top = b.parts.reduce((a, p) => (p.value > (a?.value ?? 0) ? p : a), null);
+    if (car && !typeMode && top && b.total >= 2 * avg && top.value / b.total >= 0.6) { b.note = top.label; b.hi = true; }
+    return b;
+  });
+
+  const hasEstimate = buckets.some((b) => b.estimate);
+  const legendTypes = (list) => `<ul class="costs-legend">${list.map((s) => `<li><span class="dot" ${s.attr}></span>${esc(s.label)}</li>`).join('')}</ul>`;
+  const usedTypes = COST_TYPES.filter((type) => types[type]).map(typeSeries);
+  const ghostItem = hasPrev ? `<li><span class="dot ghost"></span>${prevYear}</li>` : '';
+  let head = '';
+  let legend = '';
+  if (car) {
+    // Both legends share one cell, so the card keeps its height when switching
+    legend = `<div class="costs-legends">
+      <ul class="costs-legend"${typeMode ? '' : ' aria-hidden="true" data-off'}>${usedTypes.map((s) => `<li><span class="dot" ${s.attr}></span>${esc(s.label)}</li>`).join('')}${ghostItem}</ul>
+      <ul class="costs-legend"${typeMode ? ' aria-hidden="true" data-off' : ''}><li><span class="dot total"></span>${year}</li>${ghostItem}
+        ${hasEstimate ? `<li><span class="dot estimate"></span>${t('costs.estimated')}</li>` : ''}</ul>
+    </div>`;
+    head = segmented('costMode', t('costs.modeAria'), [['type', t('costs.byType')], ['total', t('costs.totalMode')]], costView.mode);
+  } else {
+    const slots = [...new Set(period.map((e) => carSlot(carById(e.car))))].sort((a, b) => a - b);
+    head = legendTypes(slots.map(carSeries));
+  }
+
+  return `
+    ${tiles}
+    ${costShares(types, total, t('costs.where'))}
+    ${car ? '' : costPerCar(cars, period, year)}
+    <div class="costs-pair">
+      <section class="card costs-card">
+        <div class="costs-card-head"><h2>${t('costs.perMonthChart')}</h2>${head}</div>
+        ${costChart(buckets, { avg: car ? avg : 0, avgLabel: typeMode ? t('costs.avgLine', { amount: fmtNum(Math.round(avg)) }) : `Ø ${fmtNum(Math.round(avg))}`, total: !typeMode })}
+        ${legend}
+      </section>
+      ${costTable(car, types, total, hasPrev ? byType(current ? prevSame : prevAll) : null, prevYear,
+        current ? t('costs.footSame', { period: compare }) : t('costs.footYear', { year: prevYear }))}
+    </div>`;
+}
+
+// All years: totals since purchase, average per full year, bars per year
+function costsAllYears(car, cars, entries) {
+  const now = thisYear();
+  const months = Number(today().slice(5, 7));
+  const total = sum(entries);
+  const types = byType(entries);
+  const first = [car?.info?.purchaseDate, entries.map((e) => e.date).sort()[0]].filter(Boolean).sort()[0];
+  const firstYear = first.slice(0, 4);
+  const firstMonth = Number(first.slice(5, 7));
+  // Every year since the first one (at most the last twelve)
+  const list = Array.from({ length: Number(now) - Number(firstYear) + 1 }, (_, i) => String(Number(firstYear) + i)).slice(-12);
+  // Full years: not the current one, and the first only if it started in January
+  const full = list.filter((y) => y < now && (y > firstYear || firstMonth === 1));
+  const perYear = full.length ? sum(entries.filter((e) => full.includes(e.date.slice(0, 4)))) / full.length
+    : total / Math.max(1, (Number(now) - Number(firstYear)) * 12 + months - firstMonth + 1) * 12;
+  const driven = kmInPeriod(cars, entries, 'all');
+  const prices = cars.map((c) => Number(c.info?.purchasePrice) || 0);
+  const price = sum(prices.map((cost) => ({ cost })));
+  const sinceLabel = asDate(first).toLocaleDateString(locale(), { month: 'short', year: 'numeric' });
+
+  const tiles = `
+    <div class="tiles costs-tiles">
+      ${costTile(t('costs.upkeepTotal'), money0.format(total), esc(t('costs.since', { date: sinceLabel })))}
+      ${costTile(t('costs.avgPerYear'), money0.format(perYear), esc(full.length
+        ? tn('costs.fullYears', full.length, { from: full[0], to: full.at(-1) }) : t('costs.extrapolated')))}
+      ${costTile(t('stats.perKm'), driven >= 100 ? money.format(total / driven) : '–', driven >= 100 ? esc(t('costs.kmDrivenAll', { km: km(driven) })) : '')}
+      ${price
+        ? costTile(t('costs.withPurchase'), money0.format(total + price), esc(t('costs.withPurchaseSub', { price: money0.format(price) })), 'accent')
+        : costTile(t('costs.noFuel'), money0.format(total - types.fuel), esc(t('costs.noFuelSub')))}
+    </div>`;
+
+  const currentTotal = sum(entries.filter((e) => e.date.startsWith(now)));
+  const buckets = list.map((y) => {
+    const ys = entries.filter((e) => e.date.startsWith(y));
+    const parts = car
+      ? COST_TYPES.map((type) => ({ ...typeSeries(type), value: sum(ys.filter((e) => costType(e) === type)) }))
+      : Array.from({ length: CAR_SLOTS + 1 }, (_, slot) => ({ ...carSeries(slot), value: sum(ys.filter((e) => carSlot(carById(e.car)) === slot)) }));
+    const b = { label: y === firstYear && firstMonth > 1 ? t('costs.fromMonth', { year: y, month: monthLabel(firstMonth) }) : y, long: y, parts: parts.filter((p) => p.value), total: sum(ys) };
+    if (y === now && months < 12) {
+      b.star = true;
+      b.estimateTop = currentTotal / months * 12 - currentTotal;
+    }
+    return b;
+  });
+  const series = car ? COST_TYPES.filter((type) => types[type]).map(typeSeries)
+    : [...new Set(entries.map((e) => carSlot(carById(e.car))))].sort((a, b) => a - b).map(carSeries);
+  const note = months < 12 ? `<span class="muted small">${esc(t('costs.ytdNote', { year: now, range: `${monthLabel(months + 1)}–${monthLabel(12)}` }))}</span>` : '';
+
+  return `
+    ${tiles}
+    ${costShares(types, total, `${t('costs.where')} · ${car ? t('costs.sincePurchase') : t('costs.allTime')}`)}
+    ${car ? '' : costPerCar(cars, entries, 'all')}
+    <section class="card costs-card">
+      <div class="costs-card-head"><h2>${t('costs.perYearChart')}</h2>${note}</div>
+      ${costChart(buckets, { year: true })}
+      <ul class="costs-legend">${series.map((s) => `<li><span class="dot" ${s.attr}></span>${esc(s.label)}</li>`).join('')}</ul>
+    </section>`;
+}
+
+// "Where does the money go?": one bar with the share of every type, largest first
+function costShares(types, total, title) {
+  const list = COST_TYPES.filter((type) => types[type]).sort((a, b) => types[b] - types[a]);
+  const pct = (type) => Math.round(types[type] / total * 100);
+  return `
+    <section class="card costs-shares">
+      <div class="costs-card-head"><h2>${esc(title)}</h2><span class="muted">${money0.format(total)}</span></div>
+      <div class="share-bar" role="img" aria-label="${esc(list.map((type) => `${typeLabel(type)} ${pct(type)} %`).join(', '))}">
+        ${list.map((type) => `<i data-color="${TYPES[type].color}" style="flex-grow:${types[type]}" title="${esc(`${typeLabel(type)}: ${money.format(types[type])}`)}"></i>`).join('')}
+      </div>
+      <div class="share-labels" aria-hidden="true">
+        ${list.map((type) => `<span style="flex-grow:${types[type]}">${pct(type) >= 4 ? `<b>${pct(type)}%</b> ${typeLabel(type)}` : ''}</span>`).join('')}
+      </div>
+    </section>`;
+}
+
+// All vehicles: one row per car with its costs by type; a click opens its costs
+function costPerCar(cars, entries, year) {
+  const rows = cars.map((c) => {
+    const list = entries.filter((e) => e.car === c.id);
+    return { car: c, list, total: sum(list), types: byType(list), driven: kmInPeriod([c], list, year) };
+  });
+  const max = Math.max(...rows.map((r) => r.total)) || 1;
+  const used = COST_TYPES.filter((type) => rows.some((r) => r.types[type]));
+  return `
+    <section class="card costs-cars">
+      <div class="costs-card-head"><h2>${t('costs.perCar')}</h2><span class="muted small">${t('costs.perCarHint')}</span></div>
+      ${rows.map((r) => `
+        <a class="pcar" href="#/costs/${esc(r.car.id)}">
+          <span class="pcar-name"><strong>${esc(carName(r.car))}</strong><small class="muted">${[r.car.plate, r.driven ? km(r.driven) : ''].filter(Boolean).map(esc).join(' · ')}</small></span>
+          <span class="pcar-bar"><span style="width:${r.total / max * 100}%">${COST_TYPES.filter((type) => r.types[type]).map((type) =>
+            `<i data-color="${TYPES[type].color}" style="flex-grow:${r.types[type]}" title="${esc(`${typeLabel(type)}: ${money.format(r.types[type])}`)}"></i>`).join('')}</span></span>
+          <strong class="pcar-total">${money0.format(r.total)}</strong>
+          <span class="pcar-km muted">${r.driven >= 100 ? esc(t('costs.perKmShort', { amount: fmtNum(r.total / r.driven, 2) })) : ''}</span>
+          ${icon('chevronRight')}
+        </a>`).join('')}
+      <ul class="costs-legend">${used.map(typeSeries).map((s) => `<li><span class="dot" ${s.attr}></span>${esc(s.label)}</li>`).join('')}</ul>
+    </section>`;
+}
+
+// Bar chart: stacked parts, optional previous year behind (prev), estimates
+// (dashed), an average line and labels above the bars.
+function costChart(buckets, { avg = 0, avgLabel = '', total = false, year = false } = {}) {
+  costBuckets = buckets;
+  const top = (b) => b.total + (b.estimateTop ?? 0);
+  const max = Math.max(1, ...buckets.map((b) => Math.max(top(b), b.prev ?? 0, b.estimate ?? 0)));
+  const step = gridStep(max);
+  const pct = (v) => `${v / max * 100}%`;
+  return `
+    <div class="cchart${year ? ' years' : ''}" style="--n:${buckets.length}">
+      <div class="cgrid" aria-hidden="true">
+        ${Array.from({ length: Math.floor(max / step) }, (_, i) => `<span style="bottom:${pct((i + 1) * step)}"><i>${fmtNum((i + 1) * step)}</i></span>`).join('')}
+      </div>
+      <div class="cbars">
+        ${buckets.map((b, i) => `
+          <div class="ccol${b.hi ? ' hi' : ''}" tabindex="0" data-bucket="${i}" aria-label="${esc(`${b.long}: ${money.format(b.total)}`)}">
+            ${b.prev ? `<span class="cghost" style="height:${pct(b.prev)}"></span>` : ''}
+            <div class="cbar">
+              ${b.total ? `<span class="cval">${b.note ? `<em>${esc(b.note)}</em>` : ''}${fmtNum(Math.round(b.total))}${b.star ? '*' : ''}</span>` : ''}
+              ${b.estimateTop ? `<span class="cest" style="height:${pct(b.estimateTop)}"></span>` : ''}
+              ${b.estimate ? `<span class="cest" style="height:${pct(b.estimate)}"></span>` : ''}
+              ${b.total ? `<div class="cstack" style="height:${pct(b.total)}">${total
+                ? '<i class="ctotal"></i>'
+                : b.parts.map((p) => `<i ${p.attr} style="flex-grow:${p.value}"></i>`).join('')}</div>` : ''}
+            </div>
+          </div>`).join('')}
+        ${avg ? `<div class="cavg" style="bottom:${pct(avg)}" aria-hidden="true"><span>${esc(avgLabel)}</span></div>` : ''}
+      </div>
+      <div class="caxis" aria-hidden="true">${buckets.map((b) => `<span>${esc(b.label)}</span>`).join('')}</div>
+      <div class="ctip" id="costTip" hidden></div>
+    </div>`;
+}
+
+// Tooltip of a bar: period, total, the parts and the previous year
+function showCostTip(col) {
+  const tip = $('#costTip');
+  const b = costBuckets[Number(col.dataset.bucket)];
+  if (!tip || !b || (!b.total && !b.prev)) return;
+  tip.innerHTML = `<strong>${esc(b.long)}</strong><span class="ctip-total">${esc(money.format(b.total))}</span>
+    ${b.parts.map((p) => `<span class="ctip-row"><span class="dot" ${p.attr}></span>${esc(p.label)}<b>${esc(fmtNum(Math.round(p.value)))}</b></span>`).join('')}
+    ${b.prev ? `<span class="ctip-row"><span class="dot ghost"></span>${esc(t('costs.prevYearShort'))}<b>${esc(fmtNum(Math.round(b.prev)))}</b></span>` : ''}`;
+  tip.hidden = false;
+  const chart = col.closest('.cchart').getBoundingClientRect();
+  const rect = col.getBoundingClientRect();
+  tip.style.left = `${Math.min(Math.max(0, rect.left - chart.left + rect.width / 2 - tip.offsetWidth / 2), chart.width - tip.offsetWidth)}px`;
+}
+
+// Table per type, largest first: amount, share and the change compared with the
+// previous year; for a single car a type opens its history filtered by that type.
+function costTable(car, types, total, prev, prevYear, footnote) {
+  const list = COST_TYPES.filter((type) => types[type]).sort((a, b) => types[b] - types[a]);
+  return `
+    <section class="card costs-table-card">
+      <table class="costs-table">
+        <caption class="sr-only">${t('costs.tableAria')}</caption>
+        <thead><tr>
+          <th>${t('costs.type')}</th><th class="num">${esc(currencySymbol())}</th><th class="share-col">${t('costs.share')}</th>
+          ${prev ? `<th class="num">${esc(t('costs.vs', { period: prevYear }))}*</th>` : ''}
+        </tr></thead>
+        <tbody>${list.map((type) => `
+          <tr>
+            <td><span class="dot" data-color="${TYPES[type].color}"></span>${car
+              ? `<a class="type-link" href="#/car/${esc(car.id)}/${type}">${typeLabel(type)} ›</a>` : typeLabel(type)}</td>
+            <td class="num">${fmtNum(Math.round(types[type]))}</td>
+            <td class="share-col"><span class="share-cell"><span class="share"><i data-color="${TYPES[type].color}" style="width:${types[type] / total * 100}%"></i></span>
+              <small class="muted">${fmtNum(Math.round(types[type] / total * 100))}%</small></span></td>
+            ${prev ? `<td class="num">${signed(types[type] - prev[type])}</td>` : ''}
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <p class="muted small costs-foot">${[prev ? footnote : '', t('costs.footHidden')].filter(Boolean).map(esc).join(' · ')}</p>
+    </section>`;
+}
+
+document.addEventListener('change', (ev) => {
+  const { name, value } = ev.target;
+  if (name !== 'costYear' && name !== 'costMode') return;
+  if (name === 'costYear') costView.year = value;
+  else costView.mode = value;
+  route();
+});
+
+for (const type of ['pointerover', 'focusin']) {
+  document.addEventListener(type, (ev) => {
+    const col = ev.target.closest?.('.ccol');
+    if (col) showCostTip(col);
+  });
+}
+for (const type of ['pointerout', 'focusout']) {
+  document.addEventListener(type, (ev) => {
+    if (ev.target.closest?.('.ccol') && !ev.relatedTarget?.closest?.('.ccol')) {
+      const tip = $('#costTip');
+      if (tip) tip.hidden = true;
+    }
+  });
+}
+
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // Interval only ("every 15'000 km", "yearly") – the due date is shown by the group
@@ -1443,12 +1842,12 @@ function docList(car) {
   const docs = documentsFor(car.id);
   if (!docs.length) return `<p class="muted small">${t('docs.emptyText')}</p>`;
   return `<ul class="doc-list">${docs.map((doc) => {
-    const image = doc.attachments.find(isImageName);
+    const cover = coverOf(doc, docFile);
     const files = doc.attachments.length;
     return `
       <li>
         <button class="doc-thumb" data-action="view-document" data-id="${esc(doc.id)}" ${files ? '' : 'disabled'} aria-label="${esc(t('att.view', { name: doc.title }))}">
-          ${image ? `<img data-file="${esc(docFile(doc, image))}" data-thumb="300x225" alt="">` : icon(DOC_KIND_ICONS[doc.kind] ?? 'file')}
+          ${cover ? `<img data-file="${esc(cover.path)}" data-thumb="${cover.thumb}" alt="">` : icon(DOC_KIND_ICONS[doc.kind] ?? 'file')}
         </button>
         <button class="doc-name" data-action="edit-document" data-id="${esc(doc.id)}">
           <span>${esc(doc.title)}</span>${docValidity(doc)}
@@ -1539,8 +1938,7 @@ function entryItem(e) {
   const open = openEntries.has(e.id);
   const files = e.attachments.length;
   const meta = [typeLabel(e.type), e.shop].filter(Boolean).map(esc).join(' · ');
-  // Dates of the current year without the year
-  const date = e.date.startsWith(thisYear()) ? fmtDayMonth(e.date) : fmtDateNum(e.date);
+  const date = fmtDateNum(e.date);
   return `
     <li class="entry${open ? ' open' : ''}" id="entry-${id}" data-color="${color}">
       <button class="entry-line" data-action="toggle-entry" data-id="${id}" aria-expanded="${open}">
@@ -2461,45 +2859,116 @@ for (const dialog of [carDialog, entryDialog, infoDialog, userDialog, passwordDi
   });
 }
 
-/* ---------- Image viewer ---------- */
+/* ---------- Viewer (photos, images and PDF previews) ---------- */
 
-const lb = { files: [], index: 0 };
+// Items: { name, file (original), pages: [paths], total (page count), pdf }
+const lb = { items: [], index: 0, zoom: 1 };
+const LB_ZOOM = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+const lbStage = $('#lbStage');
 
-function openLightbox(files, index) {
-  if (!files.length) return;
-  lb.files = files;
+function openLightbox(items, index) {
+  if (!items.length) return;
+  lb.items = items;
   lb.index = Math.max(0, index);
-  $('#lbImg').removeAttribute('src');
-  showLightboxImage();
+  showLightboxItem();
   lightbox.showModal();
 }
 
-async function showLightboxImage() {
-  const index = lb.index;
-  lightbox.classList.toggle('single', lb.files.length < 2);
-  $('#lbCaption').textContent = lb.files.length > 1 ? `${index + 1} / ${lb.files.length}` : '';
-  try {
-    const url = await fileObjectUrl(lb.files[index]);
-    if (lb.index === index) $('#lbImg').src = url;
-  } catch (err) {
-    console.warn(err);
-  }
+function showLightboxItem() {
+  const item = lb.items[lb.index];
+  const count = lb.items.length;
+  const more = item.total - item.pages.length;
+  lightbox.classList.toggle('single', count < 2);
+  lightbox.classList.toggle('pdf', !!item.pdf);
+  $('#lbName').textContent = item.name;
+  lbStage.innerHTML = `<div class="lb-pages">
+    ${item.pages.map((path, i) => `<img data-file="${esc(path)}" data-thumb="" alt="${esc(item.pdf ? t('lb.page', { n: i + 1, total: item.total }) : item.name)}">`).join('')}
+    ${more > 0 ? `<p class="lb-more">${esc(tn('lb.morePages', more))}
+      <button class="btn ghost sm-btn" data-lb-open>${icon('external')}${t('lb.openOriginal')}</button></p>` : ''}
+  </div>`;
+  lbStage.scrollTo(0, 0);
+  setLightboxZoom(1);
+  hydrate();
+  $('#lbCaption').innerHTML = count > 1 ? `${lb.index + 1} / ${count}<span class="kbd-hint"> · ${esc(t('lb.keys'))}</span>` : '';
 }
 
 function stepLightbox(delta) {
-  lb.index = (lb.index + delta + lb.files.length) % lb.files.length;
-  showLightboxImage();
+  lb.index = (lb.index + delta + lb.items.length) % lb.items.length;
+  showLightboxItem();
 }
 
+// At 100 % a page fits the screen; photos are not enlarged beyond their own size.
+function sizePages() {
+  const width = lbStage.clientWidth - 32;
+  const height = lbStage.clientHeight - 16;
+  for (const img of lbStage.querySelectorAll('img')) {
+    if (!img.naturalWidth) continue;
+    const fit = Math.min(width, height * img.naturalWidth / img.naturalHeight, lb.items[lb.index].pdf ? Infinity : img.naturalWidth);
+    img.style.width = `${Math.round(fit * lb.zoom)}px`;
+  }
+}
+
+// Zooms around the centre of the visible area.
+function setLightboxZoom(zoom) {
+  const cx = (lbStage.scrollLeft + lbStage.clientWidth / 2) / (lbStage.scrollWidth || 1);
+  const cy = (lbStage.scrollTop + lbStage.clientHeight / 2) / (lbStage.scrollHeight || 1);
+  lb.zoom = zoom;
+  $('#lbZoom').textContent = new Intl.NumberFormat(locale(), { style: 'percent' }).format(zoom);
+  sizePages();
+  lbStage.scrollLeft = cx * lbStage.scrollWidth - lbStage.clientWidth / 2;
+  lbStage.scrollTop = cy * lbStage.scrollHeight - lbStage.clientHeight / 2;
+  updatePageNumber();
+}
+
+function stepZoom(step) {
+  const i = LB_ZOOM.indexOf(lb.zoom);
+  setLightboxZoom(step ? LB_ZOOM[Math.min(LB_ZOOM.length - 1, Math.max(0, i + step))] : 1);
+}
+
+// "· Page 2 / 5": the page that covers the middle of the screen
+function updatePageNumber() {
+  const item = lb.items[lb.index];
+  if (!item?.pdf) {
+    $('#lbPage').textContent = '';
+    return;
+  }
+  const middle = lbStage.scrollTop + lbStage.clientHeight / 2;
+  const pages = [...lbStage.querySelectorAll('img')];
+  const i = pages.findIndex((img) => img.offsetTop + img.offsetHeight > middle);
+  const n = i >= 0 ? i + 1 : (lbStage.scrollTop > 0 ? pages.length : 1);
+  $('#lbPage').textContent = ` · ${t('lb.page', { n, total: item.total })}`;
+}
+
+async function openLightboxFile(download) {
+  const item = lb.items[lb.index];
+  const name = item.name || displayName(item.file.split('/').pop());
+  openFile(await fileObjectUrl(item.file), name, download);
+}
+
+lbStage.addEventListener('load', (ev) => {
+  if (ev.target.tagName !== 'IMG') return;
+  sizePages();
+  updatePageNumber();
+}, true);
+lbStage.addEventListener('scroll', updatePageNumber, { passive: true });
+window.addEventListener('resize', () => { if (lightbox.open) sizePages(); });
+
 lightbox.addEventListener('click', (ev) => {
-  const btn = ev.target.closest('[data-lb]');
-  if (btn) stepLightbox(Number(btn.dataset.lb));
+  const btn = ev.target.closest('[data-lb], [data-lb-zoom], [data-lb-open], #lbDownload');
+  if (btn?.dataset.lb) stepLightbox(Number(btn.dataset.lb));
+  else if (btn?.dataset.lbZoom) stepZoom(Number(btn.dataset.lbZoom));
+  else if (btn) runAction(() => openLightboxFile(btn.id === 'lbDownload'));
+  // A click next to the pages closes the viewer
+  else if (ev.target === lbStage || ev.target.classList.contains('lb-pages')) lightbox.close();
 });
 
 document.addEventListener('keydown', (ev) => {
-  if (!lightbox.open || lb.files.length < 2) return;
-  if (ev.key === 'ArrowLeft') stepLightbox(-1);
-  if (ev.key === 'ArrowRight') stepLightbox(1);
+  if (!lightbox.open || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  if (ev.key === '+' || ev.key === '=') stepZoom(1);
+  else if (ev.key === '-') stepZoom(-1);
+  else if (ev.key === '0') stepZoom(0);
+  else if (lb.items.length > 1 && ev.key === 'ArrowLeft') stepLightbox(-1);
+  else if (lb.items.length > 1 && ev.key === 'ArrowRight') stepLightbox(1);
 });
 
 /* ---------- Actions ---------- */
@@ -2569,7 +3038,7 @@ document.addEventListener('click', (ev) => {
     }
     case 'view-photo': {
       const car = carById(id);
-      openLightbox(car.photos.map((name) => carFile(car, name)), Number(el.dataset.index));
+      openLightbox(car.photos.map((name) => ({ name: '', file: carFile(car, name), pages: [carFile(car, name)], total: 1 })), Number(el.dataset.index));
       break;
     }
     case 'cover-photo':
@@ -2616,7 +3085,7 @@ document.addEventListener('click', (ev) => {
       runAction(() => viewFiles(documentById(id), docFile));
       break;
     case 'view-file':
-      // A file chip of an entry: images in the viewer, PDFs in a new tab
+      // A file card of an entry: shown in the viewer
       runAction(() => viewFiles(entryById(id), entryFile, el.dataset.file));
       break;
     case 'edit-entry':
@@ -2634,6 +3103,10 @@ document.addEventListener('click', (ev) => {
       });
       break;
     }
+    case 'cost-layout':
+      saveSettings({ costLayout: el.dataset.layout });
+      route();
+      break;
     case 'filter':
       filter.type = el.dataset.type;
       document.querySelectorAll('.tchip').forEach((c) => c.setAttribute('aria-pressed', c === el));
