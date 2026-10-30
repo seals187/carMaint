@@ -6,6 +6,12 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.2.3] – 2026-10-30
+
+### Fixed
+- After an update, browsers could keep an old style.css together with the new app.js (e.g. the cost shares bar was missing); the website files are now always revalidated
+- Cost tiles: the amounts are on one line even when a tile has no second line (e.g. no previous year or no mileage)
+
 ## [0.2.2] – 2026-10-30
 
 ### Added
@@ -128,7 +134,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/seals187/carMaint/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/seals187/carMaint/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/seals187/carMaint/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/seals187/carMaint/compare/v0.1.7...v0.2.0

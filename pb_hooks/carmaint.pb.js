@@ -117,6 +117,14 @@ onBootstrap((be) => {
   });
 });
 
+// Website files: browsers must ask before reusing them (a cheap 304 thanks to
+// Last-Modified), so after an update they never mix an old style.css with a new app.js.
+routerUse((e) => {
+  const path = e.request.url.path;
+  if (!path.startsWith('/api/') && !path.startsWith('/_/')) e.response.header().set('Cache-Control', 'no-cache');
+  return e.next();
+});
+
 // Public configuration for the website (no secrets!)
 routerAdd('GET', '/api/carmaint/config', (e) => {
   const cfg = require(`${__hooks}/config.js`);

@@ -879,6 +879,8 @@ a.tile-link:hover span { color: var(--accent); }
 .costs-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 14px; }
 .costs-tiles small { display: block; margin-top: 2px; font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile.accent strong { color: var(--accent); }
+/* Label and amount on the same line in every tile, even without a second line */
+.costs-tiles .tile { align-items: flex-start; }
 .costs-tiles small span { display: inline; font-size: inherit; font-weight: 600; letter-spacing: normal; text-transform: none; }
 .costs-tiles small .good { color: var(--ok); }
 .costs-tiles small .bad { color: var(--danger); }
