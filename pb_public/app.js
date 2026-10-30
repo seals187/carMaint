@@ -79,7 +79,8 @@ const ICONS = {
   shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
   more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   textSize: '<path d="M21 14h-5"/><path d="M16 16v-3.5a2.5 2.5 0 0 1 5 0V16"/><path d="M4.5 13h6"/><path d="m3 16 4.5-9 4.5 9"/>',
-  chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+  alarm: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/>',
+  chevronLeft:'<path d="m15 18-6-6 6-6"/>',
   chevronRight: '<path d="m9 18 6-6-6-6"/>',
   chevronDown: '<path d="m6 9 6 6 6-6"/>',
   settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
@@ -757,11 +758,17 @@ let infoCollapsed = false;
 let dueCollapsed = false;
 let lastPage = null;
 const openEntries = new Set(); // expanded rows in the history
+// Phones get their own car page; switch layouts when the width crosses the limit
+const phoneQuery = matchMedia('(max-width: 640px)');
+const isPhone = () => phoneQuery.matches;
+phoneQuery.addEventListener('change', () => auth && route());
+let phonePanel = null; // tile opened on the phone car page: 'info', 'photos' or 'docs'
 
 function route() {
   if (!auth) return renderLogin();
   const [, view, id, type] = location.hash.split('/');
   const car = view === 'car' ? carById(id) : null;
+  document.body.classList.toggle('car-phone', !!car && isPhone());
   if (view === 'settings') {
     currentCarId = null;
     renderSettings(id);
@@ -771,6 +778,7 @@ function route() {
   } else if (car) {
     if (car.id !== currentCarId) {
       filter = { type: 'all' };
+      phonePanel = null;
       // With an own choice of fields only those are shown at first
       infoCollapsed = defaultInfoCollapsed() || Array.isArray(car.info?.pinned);
     }
@@ -888,6 +896,7 @@ function dueWhen(s) {
   return {
     leafTop: date ? date.toLocaleDateString(locale(), { month: 'short' }).replace('.', '') : 'km',
     leafNum: date ? String(date.getDate()).padStart(2, '0') : `${fmtNum(Math.round(r.dueKm / 1000))}k`,
+    date: byDate ? r.dueDate : '',
     full: byDate ? fmtDateDay(r.dueDate) : km(r.dueKm),
     short: byDate ? fmtDayMonth(r.dueDate) : km(r.dueKm),
     day: byDate ? noWeekdayDot(date.toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: '2-digit' })) : km(r.dueKm),
@@ -1325,10 +1334,10 @@ function carCard(car) {
 // Car page: sidebar (photo, actions, vehicle data, photos, documents) and the
 // main column (key figures, reminders by due date, history).
 function renderCar(car) {
+  if (isPhone()) return renderCarPhone(car);
   const entries = entriesFor(car.id);
   const history = historyFor(car.id);
   const photos = car.photos;
-  const docs = documentsFor(car.id);
   const id = esc(car.id);
   const perKm = costPerKm([car]);
   const sub = [car.year, car.plate].filter(Boolean).map(esc).join(' · ');
@@ -1361,28 +1370,8 @@ function renderCar(car) {
             </div>
           </div>
           ${infoBox(car)}
-          <section class="side-section">
-            <h3 class="side-head">${t('photos.title')}${photos.length ? ` · ${photos.length}` : ''}</h3>
-            <div class="photo-grid">
-              ${photos.map((name, i) => `
-                <div class="thumb">
-                  <button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="${i}" aria-label="${t('photos.view', { n: i + 1 })}"><img data-file="${esc(carFile(car, name))}" data-thumb="300x225" alt=""></button>
-                  <div class="thumb-actions">
-                    ${i > 0 ? `<button class="icon-btn sm" data-action="cover-photo" data-id="${id}" data-photo="${esc(name)}" title="${t('photos.makeCover')}" aria-label="${t('photos.makeCover')}">${icon('star')}</button>` : ''}
-                    <button class="icon-btn sm" data-action="delete-photo" data-id="${id}" data-photo="${esc(name)}" title="${t('photos.delete')}" aria-label="${t('photos.delete')}">${icon('trash')}</button>
-                  </div>
-                </div>`).join('')}
-              <label class="thumb add" title="${t('photos.add')}">${icon('plus')}<span class="sr-only">${t('photos.add')}</span>
-                <input type="file" multiple accept="${serverConfig.fileTypes.photos.join(',')}" data-upload="car-photos" data-id="${id}" hidden>
-              </label>
-            </div>
-          </section>
-          <section class="side-section">
-            <h3 class="side-head">${t('docs.title')}${docs.length ? ` · ${docs.length}` : ''}
-              <button class="link-btn accent push-right" data-action="add-document" data-id="${id}">${icon('plus')}${t('docs.addShort')}</button>
-            </h3>
-            ${docList(car)}
-          </section>
+          ${photoSection(car)}
+          ${docSection(car)}
           ${history.length ? `<button class="link-btn" data-action="print-history" data-id="${id}">${icon('printer')}${t('btn.pdf')}</button>` : ''}
         </div>
       </aside>
@@ -1401,12 +1390,128 @@ function renderCar(car) {
         ${reminderPanel(car)}
 
         <div class="section-head history-head"><h2>${t('history.title')}</h2></div>
-        ${history.length ? `<div class="filters" role="group" aria-label="${t('filter.aria')}">${filterOptions(history).map(([value, label, n]) => `
-          <button class="tchip${n ? '' : ' none'}" data-action="filter" data-type="${value}" aria-pressed="${filter.type === value}">
-            ${value === 'all' ? '' : `<span class="dot" data-color="${TYPES[value].color}"></span>`}${esc(label)}<span class="tchip-n">${n}</span>
-          </button>`).join('')}</div>` : ''}
+        ${historyFilters(history)}
         <div id="entries"></div>
       </div>
+    </div>`;
+
+  renderEntries(car);
+}
+
+function photoSection(car) {
+  const id = esc(car.id);
+  const photos = car.photos;
+  return `
+    <section class="side-section">
+      <h3 class="side-head">${t('photos.title')}${photos.length ? ` · ${photos.length}` : ''}</h3>
+      <div class="photo-grid">
+        ${photos.map((name, i) => `
+          <div class="thumb">
+            <button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="${i}" aria-label="${t('photos.view', { n: i + 1 })}"><img data-file="${esc(carFile(car, name))}" data-thumb="300x225" alt=""></button>
+            <div class="thumb-actions">
+              ${i > 0 ? `<button class="icon-btn sm" data-action="cover-photo" data-id="${id}" data-photo="${esc(name)}" title="${t('photos.makeCover')}" aria-label="${t('photos.makeCover')}">${icon('star')}</button>` : ''}
+              <button class="icon-btn sm" data-action="delete-photo" data-id="${id}" data-photo="${esc(name)}" title="${t('photos.delete')}" aria-label="${t('photos.delete')}">${icon('trash')}</button>
+            </div>
+          </div>`).join('')}
+        <label class="thumb add" title="${t('photos.add')}">${icon('plus')}<span class="sr-only">${t('photos.add')}</span>
+          <input type="file" multiple accept="${serverConfig.fileTypes.photos.join(',')}" data-upload="car-photos" data-id="${id}" hidden>
+        </label>
+      </div>
+    </section>`;
+}
+
+function docSection(car) {
+  const docs = documentsFor(car.id);
+  return `
+    <section class="side-section">
+      <h3 class="side-head">${t('docs.title')}${docs.length ? ` · ${docs.length}` : ''}
+        <button class="link-btn accent push-right" data-action="add-document" data-id="${esc(car.id)}">${icon('plus')}${t('docs.addShort')}</button>
+      </h3>
+      ${docList(car)}
+    </section>`;
+}
+
+function historyFilters(history) {
+  if (!history.length) return '';
+  return `<div class="filters" role="group" aria-label="${t('filter.aria')}">${filterOptions(history).map(([value, label, n]) => `
+    <button class="tchip${n ? '' : ' none'}" data-action="filter" data-type="${value}" aria-pressed="${filter.type === value}">
+      ${value === 'all' ? '' : `<span class="dot" data-color="${TYPES[value].color}"></span>`}${esc(label)}<span class="tchip-n">${n}</span>
+    </button>`).join('')}</div>`;
+}
+
+// Car page on phones: small photo and name, key figures, tiles that open
+// vehicle data, photos or documents, then reminders and history; actions at the bottom.
+function renderCarPhone(car) {
+  const entries = entriesFor(car.id);
+  const history = historyFor(car.id);
+  const photos = car.photos;
+  const id = esc(car.id);
+  const perKm = costPerKm([car]);
+  const sub = [car.year, car.plate].filter(Boolean).map(esc).join(' · ');
+  const info = car.info ?? {};
+  const fields = INFO_FIELDS.filter((f) => info[f.key] != null && info[f.key] !== '').length;
+  const tiles = [
+    ['info', 'car', t('info.title'), tn('info.fieldCount', fields)],
+    ['photos', 'image', t('photos.title'), photos.length],
+    ['docs', 'file', t('docs.title'), documentsFor(car.id).length],
+  ];
+  const panel = { info: () => infoBox(car), photos: () => photoSection(car), docs: () => docSection(car) }[phonePanel];
+
+  $('#app').innerHTML = `
+    <div class="car-bar">
+      <a href="#/" class="car-bar-back" title="${t('nav.back')}">${icon('back')}<span>${esc(carName(car))}</span></a>
+      <button class="icon-btn" data-action="search-toggle" title="${t('search.aria')}" aria-label="${t('search.aria')}">${icon('search')}</button>
+      <div class="menu-wrap">
+        <button class="icon-btn" data-action="toggle-menu" aria-haspopup="true" aria-expanded="false" title="${t('car.more')}" aria-label="${t('car.more')}">${icon('more')}</button>
+        <div class="menu" hidden>
+          <button data-action="edit-car" data-id="${id}">${icon('pencil')}${t('car.edit')}</button>
+          <button data-action="edit-info" data-id="${id}">${icon('idCard')}${t('info.edit')}</button>
+          <button data-action="add-document" data-id="${id}">${icon('file')}${t('docs.addShort')}</button>
+          ${history.length ? `<button data-action="print-history" data-id="${id}">${icon('printer')}${t('btn.pdf')}</button>` : ''}
+          <button class="danger" data-action="delete-car" data-id="${id}">${icon('trash')}${t('car.delete')}</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="car-phone-head">
+      <div class="car-phone-photo">${photos[0]
+        ? `<button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="0" aria-label="${t('photos.view', { n: 1 })}"><img data-file="${esc(carFile(car, photos[0]))}" data-thumb="300x225" alt=""></button>`
+        : carMedia(car)}</div>
+      <div class="car-phone-name">
+        <h1>${carTitle(car)}</h1>
+        ${sub ? `<p class="muted">${sub}</p>` : ''}
+      </div>
+    </div>
+
+    <div class="card phone-stats">
+      <div><span>${t('stats.km')}</span><strong>${car.mileage ? fmtNum(car.mileage) : '–'}</strong></div>
+      <a href="#/costs/${id}" title="${t('costs.show')}"><span>${t('tile.costYear', { year: thisYear() })}</span><strong>${money0.format(costThisYear(entries))}${icon('chevronRight')}</strong></a>
+      <div><span>${t('stats.perKm')}</span><strong>${perKm === null ? '–' : fmtNum(perKm, 2)}</strong></div>
+    </div>
+
+    <div class="phone-tiles">${tiles.map(([key, ic, label, count]) => `
+      <button class="card phone-tile" data-action="phone-panel" data-panel="${key}" aria-expanded="${phonePanel === key}">
+        ${icon(ic)}<strong>${label}</strong><span class="muted">${count}</span>
+      </button>`).join('')}
+    </div>
+    ${panel ? `<div class="card phone-panel">${panel()}</div>` : ''}
+
+    <div class="section-head">
+      <h2>${t('rem.title')}</h2>
+      <button class="link-btn push-right" data-action="add-reminder" data-id="${id}">${icon('plus')}${t('rem.addShort')}</button>
+    </div>
+    ${reminderPanel(car, true)}
+
+    <div class="section-head history-head"><h2>${t('history.title')}</h2></div>
+    ${historyFilters(history)}
+    <div id="entries"></div>
+
+    <div class="phone-actions">
+      <button class="btn primary" data-action="add-entry" data-id="${id}">${icon('plus')}${t('btn.entry')}</button>
+      <button class="icon-btn outlined" data-action="add-reminder" data-id="${id}" title="${t('rem.add')}" aria-label="${t('rem.add')}">${icon('alarm')}</button>
+      <label class="icon-btn outlined" title="${t('photos.add')}">${icon('camera')}<span class="sr-only">${t('photos.add')}</span>
+        <input type="file" multiple accept="${serverConfig.fileTypes.photos.join(',')}" data-upload="car-photos" data-id="${id}" hidden>
+      </label>
     </div>`;
 
   renderEntries(car);
@@ -1811,7 +1916,8 @@ function reminderInterval(r) {
 
 // All reminders of the car, grouped by due date (or mileage); several due on
 // the same day can be logged as done together.
-function reminderPanel(car) {
+// compact (phones): one row per date with the titles joined and a single check
+function reminderPanel(car, compact = false) {
   const states = remindersFor(car.id).sort(bySoonest);
   if (!states.length) return `<div class="card rem-panel"><p class="muted small rem-empty">${t('rem.empty')}</p></div>`;
   const groups = new Map();
@@ -1819,6 +1925,21 @@ function reminderPanel(car) {
     const when = dueWhen(s);
     if (!groups.has(when.full)) groups.set(when.full, { when, list: [] });
     groups.get(when.full).list.push(s);
+  }
+  if (compact) {
+    return `<div class="card rem-panel compact">${[...groups.values()].map(({ when, list }) => {
+      const ids = list.map((s) => s.r.id).join(',');
+      const titles = list.map((s) => s.r.title).join(' + ');
+      return `
+        <div class="rem-group" data-level="${list[0].level}">
+          <span class="leaf"><span>${esc(when.leafTop)}</span><strong>${esc(when.leafNum)}</strong></span>
+          <div class="rem-body">
+            <span class="rem-titles">${list.map((s) => `<button class="rem-name" data-action="edit-reminder" data-id="${esc(s.r.id)}">${esc(s.r.title)}</button>`).join(' + ')}</span>
+            <small class="rem-when">${esc(list[0].level !== 'later' ? when.rel : when.date ? fmtDateNum(when.date) : when.full)}</small>
+          </div>
+          <button class="check-btn" ${list.length > 1 ? `data-action="reminders-done" data-ids="${esc(ids)}"` : `data-action="reminder-done" data-id="${esc(ids)}"`} title="${t('rem.done')}" aria-label="${esc(`${t('rem.done')}: ${titles}`)}">${icon('check')}</button>
+        </div>`;
+    }).join('')}</div>`;
   }
   return `<div class="card rem-panel">${[...groups.values()].map(({ when, list }) => `
     <div class="rem-group" data-level="${list[0].level}">
@@ -1941,12 +2062,17 @@ function entryItem(e) {
   const date = fmtDateNum(e.date);
   return `
     <li class="entry${open ? ' open' : ''}" id="entry-${id}" data-color="${color}">
+      ${isPhone() ? `
+      <button class="entry-line compact" data-action="toggle-entry" data-id="${id}" aria-expanded="${open}">
+        <span class="entry-main"><strong>${esc(e.title)}</strong><span class="muted"><time datetime="${esc(e.date)}">${date}</time> · ${meta}${e.mileage ? ` · <span class="nowrap">${km(e.mileage)}</span>` : ''}${files ? ` · <span class="nowrap">${icon('paperclip')} ${files}</span>` : ''}</span></span>
+        <span class="entry-cost">${e.cost ? money.format(e.cost) : ''}</span>
+      </button>` : `
       <button class="entry-line" data-action="toggle-entry" data-id="${id}" aria-expanded="${open}">
         <time datetime="${esc(e.date)}">${date}</time>
         <span class="entry-main"><strong>${esc(e.title)}</strong><span class="muted">${meta}${files ? ` · <span class="nowrap">${icon('paperclip')} ${files}</span>` : ''}</span></span>
         <span class="entry-km muted">${e.mileage ? km(e.mileage) : ''}</span>
         <span class="entry-cost">${e.cost ? money.format(e.cost) : ''}</span>
-      </button>
+      </button>`}
       ${files ? `<div class="file-chips">${e.attachments.map((name) => fileChip(e, name)).join('')}</div>` : ''}
       ${open ? `
         <div class="entry-detail">
@@ -3034,6 +3160,11 @@ document.addEventListener('click', (ev) => {
       const box = $('#infobox');
       box.classList.toggle('collapsed', infoCollapsed);
       box.querySelector('.info-toggle').setAttribute('aria-expanded', !infoCollapsed);
+      break;
+    }
+    case 'phone-panel': {
+      phonePanel = phonePanel === el.dataset.panel ? null : el.dataset.panel;
+      route();
       break;
     }
     case 'view-photo': {

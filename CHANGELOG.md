@@ -6,6 +6,13 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.2.5] – 2026-10-30
+
+### Changed
+- Phones: the overview shows the vehicles as compact cards in two columns.
+- Phones: new car page – own top bar, small photo next to the name, key figures in one row, tiles that open
+  vehicle data, photos and documents, compact reminders and history, and the main actions fixed at the bottom.
+
 ## [0.2.4] – 2026-10-30
 
 ### Fixed
@@ -140,7 +147,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/seals187/carMaint/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/seals187/carMaint/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/seals187/carMaint/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/seals187/carMaint/compare/v0.2.1...v0.2.2
