@@ -6,6 +6,12 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.2.4] – 2026-10-30
+
+### Fixed
+- Costs: the “Where does the money go?” bar was hidden by ad blockers such as uBlock Origin (they hide elements named like social “share” bars)
+- Overview: long car names no longer push the stats and reminders of a card down (one line with “…”, full name as tooltip); long reminder titles keep their date visible
+
 ## [0.2.3] – 2026-10-30
 
 ### Fixed
@@ -134,7 +140,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/seals187/carMaint/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/seals187/carMaint/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/seals187/carMaint/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/seals187/carMaint/compare/v0.2.0...v0.2.1

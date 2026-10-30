@@ -943,7 +943,7 @@ function carTimeline(states) {
       ${items.map(({ s, when }, i) => `<span class="dot" data-level="${s.level}" style="left:${pos(days[i])}" title="${esc(`${s.r.title} · ${when.short} · ${when.rel}`)}"></span>`).join('')}
     </div>
     <ul class="tl-legend">${items.map(({ s, when }) => `
-      <li><span class="dot" data-level="${s.level}"></span>${esc(s.r.title)} <span class="muted">${esc(when.short)}</span></li>`).join('')}
+      <li title="${esc(s.r.title)}"><span class="dot" data-level="${s.level}"></span><span class="tl-name">${esc(s.r.title)}</span> <span class="muted">${esc(when.short)}</span></li>`).join('')}
     </ul>`;
 }
 
@@ -1304,7 +1304,7 @@ function carCard(car) {
       <div class="car-card-body">
         <div class="car-card-title">
           <div>
-            <h3><a class="card-link" href="#/car/${esc(car.id)}">${carTitle(car)}</a></h3>
+            <h3><a class="card-link" href="#/car/${esc(car.id)}" title="${name}">${carTitle(car)}</a></h3>
             <p class="muted small">${sub || '&nbsp;'}</p>
           </div>
           <div class="card-actions">
@@ -1668,12 +1668,12 @@ function costShares(types, total, title) {
   const list = COST_TYPES.filter((type) => types[type]).sort((a, b) => types[b] - types[a]);
   const pct = (type) => Math.round(types[type] / total * 100);
   return `
-    <section class="card costs-shares">
+    <section class="card costs-mix">
       <div class="costs-card-head"><h2>${esc(title)}</h2><span class="muted">${money0.format(total)}</span></div>
-      <div class="share-bar" role="img" aria-label="${esc(list.map((type) => `${typeLabel(type)} ${pct(type)} %`).join(', '))}">
+      <div class="mix-bar" role="img" aria-label="${esc(list.map((type) => `${typeLabel(type)} ${pct(type)} %`).join(', '))}">
         ${list.map((type) => `<i data-color="${TYPES[type].color}" style="flex-grow:${types[type]}" title="${esc(`${typeLabel(type)}: ${money.format(types[type])}`)}"></i>`).join('')}
       </div>
-      <div class="share-labels" aria-hidden="true">
+      <div class="mix-labels" aria-hidden="true">
         ${list.map((type) => `<span style="flex-grow:${types[type]}">${pct(type) >= 4 ? `<b>${pct(type)}%</b> ${typeLabel(type)}` : ''}</span>`).join('')}
       </div>
     </section>`;
@@ -1759,7 +1759,7 @@ function costTable(car, types, total, prev, prevYear, footnote) {
       <table class="costs-table">
         <caption class="sr-only">${t('costs.tableAria')}</caption>
         <thead><tr>
-          <th>${t('costs.type')}</th><th class="num">${esc(currencySymbol())}</th><th class="share-col">${t('costs.share')}</th>
+          <th>${t('costs.type')}</th><th class="num">${esc(currencySymbol())}</th><th class="part-col">${t('costs.share')}</th>
           ${prev ? `<th class="num">${esc(t('costs.vs', { period: prevYear }))}*</th>` : ''}
         </tr></thead>
         <tbody>${list.map((type) => `
@@ -1767,7 +1767,7 @@ function costTable(car, types, total, prev, prevYear, footnote) {
             <td><span class="dot" data-color="${TYPES[type].color}"></span>${car
               ? `<a class="type-link" href="#/car/${esc(car.id)}/${type}">${typeLabel(type)} ›</a>` : typeLabel(type)}</td>
             <td class="num">${fmtNum(Math.round(types[type]))}</td>
-            <td class="share-col"><span class="share-cell"><span class="share"><i data-color="${TYPES[type].color}" style="width:${types[type] / total * 100}%"></i></span>
+            <td class="part-col"><span class="part-cell"><span class="part-bar"><i data-color="${TYPES[type].color}" style="width:${types[type] / total * 100}%"></i></span>
               <small class="muted">${fmtNum(Math.round(types[type] / total * 100))}%</small></span></td>
             ${prev ? `<td class="num">${signed(types[type] - prev[type])}</td>` : ''}
           </tr>`).join('')}

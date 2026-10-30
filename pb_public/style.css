@@ -248,7 +248,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .card-link:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius); }
 .car-card-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .car-card-title > div { min-width: 0; }
-.car-card-title h3 { overflow-wrap: anywhere; }
+/* One line each, so the stats and reminders of all cards line up (full name as tooltip) */
+.car-card-title h3, .car-card-title p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .quick-add {
   position: relative; z-index: 2; flex-shrink: 0;
   width: 34px; height: 34px; border-radius: 10px;
@@ -369,7 +370,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tl-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; font-size: .85rem; }
 .tl-legend + .card-last { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
 .card-last { font-size: .8rem; }
-.tl-legend li { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.tl-legend li { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; white-space: nowrap; }
+/* Long titles are shortened, the date stays visible */
+.tl-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tl-legend li .muted { flex-shrink: 0; }
 .tl-legend .muted { font-variant-numeric: tabular-nums; }
 .card-foot .dot { display: inline-block; flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .dot[data-level="overdue"] { background: var(--danger); }
@@ -884,7 +888,7 @@ a.tile-link:hover span { color: var(--accent); }
 .costs-tiles small span { display: inline; font-size: inherit; font-weight: 600; letter-spacing: normal; text-transform: none; }
 .costs-tiles small .good { color: var(--ok); }
 .costs-tiles small .bad { color: var(--danger); }
-.costs-card, .costs-shares, .costs-cars, .costs-table-card { padding: 18px 20px; margin-bottom: 14px; }
+.costs-card, .costs-mix, .costs-cars, .costs-table-card { padding: 18px 20px; margin-bottom: 14px; }
 .costs-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 14px; }
 .costs-card-head h2 { font-size: 1rem; }
 .costs-card-head .segmented span { padding: 5px 12px; font-size: .85rem; }
@@ -896,13 +900,14 @@ a.tile-link:hover span { color: var(--accent); }
 [data-car="4"] { --c: var(--car-4); }
 [data-car="5"] { --c: var(--car-5); }
 
-/* Where the money goes: one bar with the shares */
-.share-bar { display: flex; gap: 2px; height: 14px; overflow: hidden; border-radius: 7px; }
-.share-bar i { min-width: 3px; background: var(--c); }
-.share-labels { display: flex; gap: 2px; margin-top: 8px; font-size: .82rem; color: var(--muted); }
-.share-labels span { min-width: 0; text-align: right; white-space: nowrap; }
-.share-labels span:first-child { text-align: left; }
-.share-labels b { color: var(--text); }
+/* Where the money goes: one bar with the shares. No class names with "share":
+   ad blockers hide those as social media buttons. */
+.mix-bar { display: flex; gap: 2px; height: 14px; overflow: hidden; border-radius: 7px; }
+.mix-bar i { min-width: 3px; background: var(--c); }
+.mix-labels { display: flex; gap: 2px; margin-top: 8px; font-size: .82rem; color: var(--muted); }
+.mix-labels span { min-width: 0; text-align: right; white-space: nowrap; }
+.mix-labels span:first-child { text-align: left; }
+.mix-labels b { color: var(--text); }
 
 /* Bar chart */
 .cchart { position: relative; padding-top: var(--chart-top, 36px); }
@@ -974,11 +979,11 @@ a.tile-link:hover span { color: var(--accent); }
 .costs-table .num { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .costs-table th.num { font-weight: 700; }
 .type-link:hover { color: var(--accent); }
-.share-col { width: 30%; }
-.share-cell { display: flex; align-items: center; gap: 10px; }
-.share { flex: 1; max-width: 140px; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
-.share i { display: block; height: 100%; border-radius: 3px; background: var(--c); }
-.share-cell small { min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+.part-col { width: 30%; }
+.part-cell { display: flex; align-items: center; gap: 10px; }
+.part-bar { flex: 1; max-width: 140px; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.part-bar i { display: block; height: 100%; border-radius: 3px; background: var(--c); }
+.part-cell small { min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
 .costs-foot { margin: 10px 8px 0; }
 
 /* Layout switch (compact with the table next to the chart, or below each other) */
@@ -987,12 +992,12 @@ a.tile-link:hover span { color: var(--accent); }
 .layout-toggle .icon-btn { width: 30px; height: 30px; border-radius: 7px; }
 .layout-toggle .icon-btn[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgb(0 0 0 / .12); }
 .costs.split { --chart-h: 150px; --chart-top: 26px; }
-.costs.split .costs-shares { padding-block: 12px; }
-.costs.split .costs-shares .costs-card-head { margin-bottom: 6px; }
+.costs.split .costs-mix { padding-block: 12px; }
+.costs.split .costs-mix .costs-card-head { margin-bottom: 6px; }
 .costs.split .costs-tiles { gap: 8px; margin-bottom: 8px; }
 .costs.split .costs-tiles .tile { padding: 10px 16px; }
 .costs.split .costs-tiles strong { font-size: 1.3rem; }
-.costs.split .costs-card, .costs.split .costs-shares, .costs.split .costs-cars, .costs.split .costs-table-card { padding: 14px 18px; margin-bottom: 8px; }
+.costs.split .costs-card, .costs.split .costs-mix, .costs.split .costs-cars, .costs.split .costs-table-card { padding: 14px 18px; margin-bottom: 8px; }
 .costs.split .costs-card-head { margin-bottom: 8px; }
 .costs.split .costs-legends, .costs.split .costs-legend { margin-top: 10px; }
 .costs.split .pcar { padding-block: 6px; }
@@ -1003,8 +1008,8 @@ a.tile-link:hover span { color: var(--accent); }
   .costs.split .costs-pair > .card { margin-bottom: 0; }
   .costs.split .costs-pair .costs-table { font-size: .85rem; }
   .costs.split .costs-pair .costs-table th, .costs.split .costs-pair .costs-table td { padding: 7px 6px; }
-  .costs.split .costs-pair .share { flex: none; width: 56px; }
-  .costs.split .costs-pair .share-col { width: auto; }
+  .costs.split .costs-pair .part-bar { flex: none; width: 56px; }
+  .costs.split .costs-pair .part-col { width: auto; }
 }
 @media (max-width: 1099px) {
   .layout-toggle { display: none; }
@@ -1021,11 +1026,11 @@ a.tile-link:hover span { color: var(--accent); }
   .cbars, .caxis { margin-left: 0; }
   .cbars, .caxis { gap: 0 4px; }
   .cbar { width: 70%; }
-  .costs-card, .costs-shares, .costs-cars, .costs-table-card { padding-inline: 14px; }
-  .share-col { display: none; }
-  .share-labels { flex-wrap: wrap; gap: 4px 14px; }
-  .share-labels span { flex: none !important; text-align: left; font-size: .8rem; }
-  .share-labels span:empty { display: none; }
+  .costs-card, .costs-mix, .costs-cars, .costs-table-card { padding-inline: 14px; }
+  .part-col { display: none; }
+  .mix-labels { flex-wrap: wrap; gap: 4px 14px; }
+  .mix-labels span { flex: none !important; text-align: left; font-size: .8rem; }
+  .mix-labels span:empty { display: none; }
 }
 
 /* Toast */
