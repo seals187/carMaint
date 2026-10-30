@@ -6,6 +6,23 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.2.9] – 2026-10-30
+
+### Added
+- Phones: a back button next to "+ Entry" in the bottom bar of the car page.
+- Search: entries show the icon of their type.
+
+### Changed
+- Phones: mileage, costs and cost per km sit below the car name, one per line, instead of in their own box.
+- Phones: history entries show only a paperclip that opens the attachment; the file cards appear when the entry is
+  expanded.
+- Phones: the buttons on the car cards sit at the bottom right of the photo; the "+ Vehicle" button on the overview is
+  no taller than the heading.
+- Car page: no arrow in the cost tile any more; it still opens the cost page. On phones the cost row is tinted.
+
+### Fixed
+- Phones: the car name wraps instead of being cut off next to the medium-sized photo.
+
 ## [0.2.8] – 2026-10-30
 
 ### Added
@@ -184,7 +201,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/seals187/carMaint/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/seals187/carMaint/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/seals187/carMaint/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/seals187/carMaint/compare/v0.2.5...v0.2.6

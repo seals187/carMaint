@@ -1358,7 +1358,7 @@ function renderCar(car) {
   const perKm = costPerKm([car]);
   const sub = [car.year, car.plate].filter(Boolean).map(esc).join(' · ');
   const tile = (label, value, extra = '', href = '') => (href
-    ? `<a class="card tile tile-link" href="${href}" title="${t('costs.show')}"><div><span>${label}</span><strong>${value}</strong></div>${extra}${icon('chevronRight')}</a>`
+    ? `<a class="card tile tile-link" href="${href}" title="${t('costs.show')}"><div><span>${label}</span><strong>${value}</strong></div>${extra}</a>`
     : `<div class="card tile"><div><span>${label}</span><strong>${value}</strong></div>${extra}</div>`);
 
   $('#app').innerHTML = `
@@ -1499,18 +1499,17 @@ function renderCarPhone(car) {
       <div class="car-phone-name">
         <h1>${carTitle(car)}</h1>
         ${sub ? `<p class="muted">${sub}</p>` : ''}
+        <div class="phone-stats">
+          <div><span>${t('stats.km')}</span><strong>${car.mileage ? fmtNum(car.mileage) : '–'}</strong></div>
+          <a href="#/costs/${id}" title="${t('costs.show')}"><span>${t('tile.costYear', { year: thisYear() })}</span><strong>${money0.format(costThisYear(entries))}</strong></a>
+          <div><span>${t('stats.perKm')}</span><strong>${perKm === null ? '–' : fmtNum(perKm, 2)}</strong></div>
+        </div>
       </div>
       ${photos[0] ? `
       <div class="photo-zoom">
         <button class="icon-btn sm" data-action="photo-size" data-step="1" title="${t('photos.larger')}" aria-label="${t('photos.larger')}" ${size === PHONE_PHOTO_THUMBS.length - 1 ? 'disabled' : ''}>${icon('plus')}</button>
         <button class="icon-btn sm" data-action="photo-size" data-step="-1" title="${t('photos.smaller')}" aria-label="${t('photos.smaller')}" ${size === 0 ? 'disabled' : ''}>${icon('minus')}</button>
       </div>` : ''}
-    </div>
-
-    <div class="card phone-stats">
-      <div><span>${t('stats.km')}</span><strong>${car.mileage ? fmtNum(car.mileage) : '–'}</strong></div>
-      <a href="#/costs/${id}" title="${t('costs.show')}"><span>${t('tile.costYear', { year: thisYear() })}</span><strong>${money0.format(costThisYear(entries))}${icon('chevronRight')}</strong></a>
-      <div><span>${t('stats.perKm')}</span><strong>${perKm === null ? '–' : fmtNum(perKm, 2)}</strong></div>
     </div>
 
     <div class="phone-tiles">${tiles.map(([key, ic, label, count]) => `
@@ -1533,6 +1532,7 @@ function renderCarPhone(car) {
     <div id="entries"></div>
 
     <div class="phone-actions">
+      <a href="#/" class="icon-btn outlined" title="${t('nav.back')}" aria-label="${t('nav.back')}">${icon('back')}</a>
       <button class="btn primary" data-action="add-entry" data-id="${id}">${icon('plus')}${t('btn.entry')}</button>
       <button class="icon-btn outlined" data-action="add-reminder" data-id="${id}" title="${t('rem.add')}" aria-label="${t('rem.add')}">${icon('alarm')}</button>
       <label class="icon-btn outlined" title="${t('photos.add')}">${icon('camera')}<span class="sr-only">${t('photos.add')}</span>
@@ -2103,7 +2103,7 @@ function entryItem(e) {
     <li class="entry${open ? ' open' : ''}" id="entry-${id}" data-color="${color}">
       ${isPhone() ? `
       <button class="entry-line compact" data-action="toggle-entry" data-id="${id}" aria-expanded="${open}">
-        <span class="entry-main"><strong><span class="entry-type">${typeIcon(e.type)}</span>${esc(e.title)}</strong><span class="muted"><time datetime="${esc(e.date)}">${date}</time> · ${meta}${e.mileage ? ` · <span class="nowrap">${km(e.mileage)}</span>` : ''}${files ? ` · <span class="nowrap">${icon('paperclip')} ${files}</span>` : ''}</span></span>
+        <span class="entry-main"><strong><span class="entry-type">${typeIcon(e.type)}</span>${esc(e.title)}</strong><span class="muted entry-sub"><span class="entry-sub-text"><time datetime="${esc(e.date)}">${date}</time> · ${meta}${e.mileage ? ` · <span class="nowrap">${km(e.mileage)}</span>` : ''}</span>${files ? `<span class="entry-clip" data-action="view-file" data-id="${id}" data-file="${esc(e.attachments[0])}" title="${esc(t('att.view', { name: attachmentLabel(e, e.attachments[0]) }))}">${icon('paperclip')}${files > 1 ? files : ''}</span>` : ''}</span></span>
         <span class="entry-cost">${e.cost ? money.format(e.cost) : ''}</span>
       </button>` : `
       <button class="entry-line" data-action="toggle-entry" data-id="${id}" aria-expanded="${open}">
@@ -2112,7 +2112,7 @@ function entryItem(e) {
         <span class="entry-km muted">${e.mileage ? km(e.mileage) : ''}</span>
         <span class="entry-cost">${e.cost ? money.format(e.cost) : ''}</span>
       </button>`}
-      ${files ? `<div class="file-chips">${e.attachments.map((name) => fileChip(e, name)).join('')}</div>` : ''}
+      ${files && (open || !isPhone()) ? `<div class="file-chips">${e.attachments.map((name) => fileChip(e, name)).join('')}</div>` : ''}
       ${open ? `
         <div class="entry-detail">
           ${e.notes ? `<p class="entry-notes">${esc(e.notes)}</p>` : ''}
@@ -2888,7 +2888,7 @@ function renderSearch() {
     <a class="sr-item" href="#/car/${esc(c.id)}"><strong>${carTitle(c)}</strong><span class="muted small">${[c.year, c.plate].filter(Boolean).map(esc).join(' · ')}</span></a>`);
   const entries = db.entries.filter((e) => matches([e.title, e.shop, e.notes]))
     .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8).map((e) => `
-    <a class="sr-item" href="#/car/${esc(e.car)}" data-entry="${esc(e.id)}"><strong>${esc(e.title)}</strong>
+    <a class="sr-item" href="#/car/${esc(e.car)}" data-entry="${esc(e.id)}"><strong>${typeIcon(e.type)}${esc(e.title)}</strong>
       <span class="muted small">${[carName(carById(e.car)), fmtDateNum(e.date), e.cost && money.format(e.cost)].filter(Boolean).map(esc).join(' · ')}</span></a>`);
   searchResults.innerHTML = [...cars, ...entries].join('') || `<p class="muted small sr-empty">${t('search.noResults')}</p>`;
   searchResults.hidden = false;
