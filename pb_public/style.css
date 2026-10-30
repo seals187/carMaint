@@ -308,7 +308,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 #due .leaf strong { padding: 0 0 1px; font-size: .9rem; }
 #due .check-btn { width: 26px; height: 26px; border-radius: 8px; }
 #due .check-btn .ic { width: 13px; height: 13px; }
-.due-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; align-items: start; margin-bottom: 28px; }
+.due-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; align-items: start; margin-bottom: 28px; }
 .due-col { --lvl: var(--accent); --bar: var(--accent); overflow: hidden; }
 .due-col[data-level="overdue"] { --lvl: var(--danger); --bar: var(--danger); }
 .due-col[data-level="soon"] { --lvl: var(--warn); --bar: var(--warn-bar); }
@@ -340,6 +340,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .due-main .due-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .due-main:hover .due-title { text-decoration: underline; text-underline-offset: 3px; }
 .due-rel { color: var(--lvl); font-weight: 700; white-space: nowrap; }
+/* Narrow columns: the due time always gets its own line */
+@media (min-width: 641px) {
+  .due-sep { display: none; }
+  .due-rel { display: block; }
+}
 .check-btn {
   display: grid; place-items: center; flex-shrink: 0; width: 30px; height: 30px; margin-left: auto;
   border: 1px solid var(--border); border-radius: 10px; background: none; color: var(--text); cursor: pointer;
@@ -378,7 +383,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .card-foot .dot { display: inline-block; flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .dot[data-level="overdue"] { background: var(--danger); }
 .dot[data-level="soon"] { background: var(--warn-bar); }
-.dot[data-level="upcoming"] { background: var(--accent); }
+.dot[data-level="next"], .dot[data-level="upcoming"] { background: var(--accent); }
 .car-card-body { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; flex: 1; }
 
 .avatar {
@@ -1328,8 +1333,8 @@ dialog.sheet { width: min(460px, calc(100% - 32px)); }
 .car-phone #app .section-head h2 { font-size: 1.05rem; }
 .rem-toggle { display: flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; }
 .rem-toggle > .ic { width: 18px; height: 18px; color: var(--muted); transition: transform .2s; }
-.phone-rem.collapsed .rem-toggle > .ic { transform: rotate(-90deg); }
-.phone-rem.collapsed .rem-panel { display: none; }
+.rem-section.collapsed .rem-toggle > .ic { transform: rotate(-90deg); }
+.rem-section.collapsed .rem-panel { display: none; }
 .count-pill[data-level="overdue"] { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
 .count-pill[data-level="upcoming"] { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .count-pill[data-level="later"] { background: var(--surface-2); color: var(--muted); }

@@ -152,6 +152,7 @@ const asDate = (iso) => new Date(`${iso}T00:00:00`);
 const fmtDate = (iso) => (iso ? asDate(iso).toLocaleDateString(locale(), { day: '2-digit', month: 'short', year: 'numeric' }) : '–');
 const fmtDateNum = (iso) => asDate(iso).toLocaleDateString(locale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
 const fmtDayMonth = (iso) => asDate(iso).toLocaleDateString(locale(), { day: '2-digit', month: '2-digit' });
+const fmtDateShort = (iso) => asDate(iso).toLocaleDateString(locale(), { day: '2-digit', month: '2-digit', year: '2-digit' });
 const fmtMonthYear = (iso) => asDate(iso).toLocaleDateString(locale(), { month: 'short', year: 'numeric' });
 const today = () => {
   const d = new Date();
@@ -197,6 +198,13 @@ const INFO_FIELDS = [
   // Tyre sizes; different sizes front/rear as "225/40 R18 / 255/35 R18"
   { group: 'tires', key: 'tiresSummer', placeholder: '205/55 R16 91V', upper: true, format: mono },
   { group: 'tires', key: 'tiresWinter', placeholder: '205/55 R16 91H', upper: true, format: mono },
+  { group: 'tires', key: 'pressureFront', unit: () => 'bar', type: 'number', step: '0.1', placeholder: '2.3', format: (v) => `${fmtNum(v)} bar` },
+  { group: 'tires', key: 'pressureRear', unit: () => 'bar', type: 'number', step: '0.1', placeholder: '2.3', format: (v) => `${fmtNum(v)} bar` },
+  { group: 'oil', key: 'oilType', placeholder: '5W-30', format: mono },
+  { group: 'oil', key: 'oilCapacity', unit: () => 'l', type: 'number', step: '0.01', placeholder: '4.3', format: (v) => `${fmtNum(v)} l` },
+  { group: 'battery', key: 'batteryType', placeholderKey: 'ph.batteryType' },
+  { group: 'battery', key: 'batteryCapacity', unit: () => 'Ah', type: 'number', placeholder: '60', format: (v) => `${fmtNum(v)} Ah` },
+  { group: 'battery', key: 'batteryCca', unit: () => 'A', type: 'number', placeholder: '640', format: (v) => `${fmtNum(v)} A` },
   { group: 'inspection', key: 'lastInspection', type: 'date', format: fmtDate },
   { group: 'inspection', key: 'nextInspection', type: 'date', format: (v) => `${fmtDate(v)}${dueBadge(v)}` },
 ];
@@ -841,7 +849,7 @@ function renderHome() {
       <section id="due"${dueCollapsed ? ' class="collapsed"' : ''}>
         <button class="section-head due-toggle" data-action="toggle-due" aria-expanded="${!dueCollapsed}" aria-controls="dueBoard">
           <h2>${t('home.due')}</h2><span class="count-pill">${due.length}</span>${icon('chevronDown')}
-          <span class="due-summary">${DUE_COLUMNS.map(([level, key]) => [level, key, due.filter((s) => s.level === level).length])
+          <span class="due-summary">${DUE_COLUMNS.map(([level, key]) => [level, key, due.filter((s) => dueColumn(s) === level).length])
             .filter(([, , n]) => n).map(([level, key, n]) => `<span><span class="dot" data-level="${level}"></span>${t(key)} ${n}</span>`).join('')}</span>
         </button>
         ${dueBoard(due)}
@@ -853,20 +861,26 @@ function renderHome() {
       : emptyState('car', t('home.emptyTitle'), t('home.emptyText'), addBtn(t('home.addFirstCar')))}`;
 }
 
-// "Due soon" on the home page: one column per level; the same reminder on
-// several cars is grouped (collapsible).
-const DUE_COLUMNS = [['overdue', 'due.colOverdue'], ['soon', 'due.colSoon'], ['upcoming', 'due.colLater']];
+// "Due soon" on the home page: one column per calendar week (Monday to Sunday);
+// the same reminder on several cars is grouped (collapsible).
+const DUE_COLUMNS = [['overdue', 'due.colOverdue'], ['soon', 'due.colSoon'], ['next', 'due.colNext'], ['upcoming', 'due.colLater']];
 const collapsedDue = new Set();
 // Soonest first; mileage counts as ~50 km per day
 const soonest = (s) => Math.min(s.days ?? Infinity, s.kmLeft === null ? Infinity : s.kmLeft / 50);
 const bySoonest = (a, b) => soonest(a) - soonest(b);
+function dueColumn(s) {
+  if (s.level === 'overdue') return 'overdue';
+  const toSunday = (7 - asDate(today()).getDay()) % 7;
+  const left = soonest(s);
+  return left <= toSunday ? 'soon' : left <= toSunday + 7 ? 'next' : 'upcoming';
+}
 // "Do., 22.10." -> "Do, 22.10."
 const noWeekdayDot = (s) => s.replace(/^(\p{L}+)\./u, '$1');
 const fmtDateDay = (iso) => noWeekdayDot(asDate(iso).toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }));
 
 function dueBoard(due) {
   return `<div class="due-board" id="dueBoard">${DUE_COLUMNS.map(([level, key]) => {
-    const items = due.filter((s) => s.level === level).sort(bySoonest);
+    const items = due.filter((s) => dueColumn(s) === level).sort(bySoonest);
     if (!items.length) return '';
     const groups = new Map();
     for (const s of items) {
@@ -887,10 +901,14 @@ function dueWhen(s) {
   // Overdue: whichever limit was actually passed
   const kmOver = kmLeft !== null && kmLeft <= 0;
   const byDate = s.level === 'overdue' ? days !== null && days < 0 && !(kmOver && s.byKm) : !!r.dueDate && !s.byKm;
+  // relDays: like rel, but never falls back to the month for far-away dates
   let rel;
+  let relDays;
   if (s.level === 'overdue') rel = byDate ? tn('due.since', -days) : t('due.overdueKm', { km: km(-kmLeft) });
-  else if (byDate) rel = days === 0 ? t('due.today') : days === 1 ? t('due.tomorrow') : days <= UPCOMING_DAYS ? tn('due.inDays', days) : fmtMonthYear(r.dueDate);
-  else rel = t('due.inKm', { km: km(kmLeft) });
+  else if (byDate) {
+    relDays = days === 0 ? t('due.today') : days === 1 ? t('due.tomorrow') : tn('due.inDays', days);
+    rel = days <= UPCOMING_DAYS ? relDays : fmtMonthYear(r.dueDate);
+  } else rel = t('due.inKm', { km: km(kmLeft) });
   // Calendar leaf: month + day, or "km" + thousands for mileage reminders
   const date = byDate && asDate(r.dueDate);
   return {
@@ -898,9 +916,10 @@ function dueWhen(s) {
     leafNum: date ? String(date.getDate()).padStart(2, '0') : `${fmtNum(Math.round(r.dueKm / 1000))}k`,
     date: byDate ? r.dueDate : '',
     full: byDate ? fmtDateDay(r.dueDate) : km(r.dueKm),
-    short: byDate ? fmtDayMonth(r.dueDate) : km(r.dueKm),
-    day: byDate ? noWeekdayDot(date.toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: '2-digit' })) : km(r.dueKm),
+    short: byDate ? fmtDateShort(r.dueDate) : km(r.dueKm),
+    num: byDate ? fmtDateNum(r.dueDate) : km(r.dueKm),
     rel,
+    relDays: relDays ?? rel,
     other: byDate ? (r.dueKm ? t('due.orAtKm', { km: km(r.dueKm) }) : '') : (r.dueDate ? t('due.orOn', { date: fmtDateNum(r.dueDate) }) : ''),
   };
 }
@@ -915,8 +934,8 @@ function dueRow(s, grouped = false) {
       <span class="leaf" title="${esc(tip)}"><span>${esc(when.leafTop)}</span><strong>${esc(when.leafNum)}</strong></span>
       <button class="due-main" data-action="edit-reminder" data-id="${id}" title="${esc(tip)}">
         ${grouped
-          ? `<span class="due-title">${esc(carName(s.car))}</span><span class="muted">${esc(when.rel)}</span>`
-          : `<strong class="due-title">${esc(s.r.title)}</strong><span class="muted">${esc(carName(s.car))} · <span class="due-rel">${esc(when.rel)}</span></span>`}
+          ? `<span class="due-title muted">${esc(carName(s.car))}</span><span class="due-rel">${esc(when.rel)}</span>`
+          : `<strong class="due-title">${esc(s.r.title)}</strong><span class="muted">${esc(carName(s.car))}<span class="due-sep"> · </span><span class="due-rel">${esc(when.rel)}</span></span>`}
       </button>
       <button class="check-btn" data-action="reminder-done" data-id="${id}" title="${t('rem.done')}" aria-label="${esc(`${t('rem.done')}: ${s.r.title} · ${carName(s.car)}`)}">${icon('check')}</button>
     </div>`;
@@ -1383,11 +1402,13 @@ function renderCar(car) {
           ${tile(t('stats.perKm'), perKm === null ? '–' : fmtNum(perKm, 2))}
         </div>
 
-        <div class="section-head">
-          <h2>${t('rem.title')}</h2>
-          <button class="link-btn push-right" data-action="add-reminder" data-id="${id}">${icon('plus')}${t('rem.add')}</button>
-        </div>
-        ${reminderPanel(car)}
+        <section class="rem-section${settings.remCollapsedPc ? ' collapsed' : ''}">
+          <div class="section-head">
+            ${remToggle(car, 'remCollapsedPc')}
+            <button class="link-btn push-right" data-action="add-reminder" data-id="${id}">${icon('plus')}${t('rem.add')}</button>
+          </div>
+          ${reminderPanel(car)}
+        </section>
 
         <div class="section-head history-head"><h2>${t('history.title')}</h2></div>
         ${historyFilters(history)}
@@ -1456,8 +1477,6 @@ function renderCarPhone(car) {
     ['docs', 'file', t('docs.title'), documentsFor(car.id).length],
   ];
   const panel = { info: () => infoBox(car), photos: () => photoSection(car), docs: () => docSection(car) }[phonePanel];
-  const states = remindersFor(car.id).sort(bySoonest);
-  const remCollapsed = !!settings.remCollapsed;
 
   $('#app').innerHTML = `
     <div class="car-bar">
@@ -1498,11 +1517,9 @@ function renderCarPhone(car) {
     </div>
     ${panel ? `<div class="card phone-panel">${panel()}</div>` : ''}
 
-    <section class="phone-rem${remCollapsed ? ' collapsed' : ''}">
+    <section class="rem-section${settings.remCollapsed ? ' collapsed' : ''}">
       <div class="section-head">
-        <button class="rem-toggle" data-action="toggle-reminders" aria-expanded="${!remCollapsed}">
-          <h2>${t('rem.title')}</h2>${states.length ? `<span class="count-pill" data-level="${states[0].level}">${states.length}</span>` : ''}${icon('chevronDown')}
-        </button>
+        ${remToggle(car, 'remCollapsed')}
         <button class="link-btn push-right" data-action="add-reminder" data-id="${id}">${icon('plus')}${t('rem.addShort')}</button>
       </div>
       ${reminderPanel(car, true)}
@@ -1920,6 +1937,15 @@ function reminderInterval(r) {
   return r.intervalMonths ? tn('rem.everyMonths', r.intervalMonths) : '';
 }
 
+// Heading that folds the reminders; key: the setting, separate for phone and PC
+function remToggle(car, key) {
+  const states = remindersFor(car.id).sort(bySoonest);
+  return `
+    <button class="rem-toggle" data-action="toggle-reminders" data-key="${key}" aria-expanded="${!settings[key]}">
+      <h2>${t('rem.title')}</h2>${states.length ? `<span class="count-pill" data-level="${states[0].level}">${states.length}</span>` : ''}${icon('chevronDown')}
+    </button>`;
+}
+
 // All reminders of the car, grouped by due date (or mileage); several due on
 // the same day can be logged as done together.
 // compact (phones): one row per date with the titles joined and a single check
@@ -1941,7 +1967,7 @@ function reminderPanel(car, compact = false) {
           <span class="leaf"><span>${esc(when.leafTop)}</span><strong>${esc(when.leafNum)}</strong></span>
           <div class="rem-body">
             <span class="rem-titles">${list.map((s) => `<button class="rem-name" data-action="edit-reminder" data-id="${esc(s.r.id)}">${esc(s.r.title)}</button>`).join(' + ')}</span>
-            <small class="rem-when">${esc(list[0].level !== 'later' ? when.rel : when.date ? fmtDateNum(when.date) : when.full)}</small>
+            <small class="rem-when">${esc(`${when.relDays} · ${when.num}`)}</small>
           </div>
           <button class="check-btn" ${list.length > 1 ? `data-action="reminders-done" data-ids="${esc(ids)}"` : `data-action="reminder-done" data-id="${esc(ids)}"`} title="${t('rem.done')}" aria-label="${esc(`${t('rem.done')}: ${titles}`)}">${icon('check')}</button>
         </div>`;
@@ -1952,7 +1978,7 @@ function reminderPanel(car, compact = false) {
       <span class="leaf"><span>${esc(when.leafTop)}</span><strong>${esc(when.leafNum)}</strong></span>
       <div class="rem-body">
         <div class="rem-head">
-          <strong class="rem-when">${esc(list[0].level === 'later' ? when.full : `${capitalize(when.rel)} · ${when.day}`)}</strong>
+          <strong class="rem-when">${esc(`${capitalize(when.relDays)} · ${when.num}`)}</strong>
           ${list.length > 1 ? `<button class="btn ghost sm-btn" data-action="reminders-done" data-ids="${esc(list.map((s) => s.r.id).join(','))}">${list.length === 2 ? t('rem.bothDone') : t('rem.allDone')}</button>` : ''}
         </div>
         ${list.map((s) => `
@@ -3169,9 +3195,9 @@ document.addEventListener('click', (ev) => {
       break;
     }
     case 'toggle-reminders': {
-      const collapsed = !settings.remCollapsed;
-      saveSettings({ remCollapsed: collapsed });
-      el.closest('.phone-rem').classList.toggle('collapsed', collapsed);
+      const collapsed = !settings[el.dataset.key];
+      saveSettings({ [el.dataset.key]: collapsed });
+      el.closest('.rem-section').classList.toggle('collapsed', collapsed);
       el.setAttribute('aria-expanded', !collapsed);
       break;
     }

@@ -6,6 +6,22 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.2.7] – 2026-10-30
+
+### Added
+- Vehicle data: tyre pressure front/rear, engine oil (type, capacity) and battery (type, capacity, cold cranking
+  current).
+- Car page: reminders can also be folded on larger screens (remembered per user, separately from phones).
+
+### Fixed
+- Overview: reminders are sorted by calendar week – "This week" ends on Sunday, a new column "Next week" covers
+  Monday to Sunday, everything after that is under "Later". Mileage reminders are estimated at 50 km per day.
+- Overview: the due time looks the same in every reminder row, including grouped ones, and always has its own
+  line in the columns; car names in grouped rows use the same colour as in the other rows.
+- Overview: car cards show reminder dates with the year (DD.MM.YY).
+- Car page: reminders always show the time left and the full date with the year (DD.MM.YYYY), also for dates
+  far ahead.
+
 ## [0.2.6] – 2026-10-30
 
 ### Changed
@@ -153,7 +169,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/seals187/carMaint/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/seals187/carMaint/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/seals187/carMaint/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/seals187/carMaint/compare/v0.2.3...v0.2.4
