@@ -1,0 +1,194 @@
+// Browser walk-through for e2e/compare.sh: seeds data, visits every view, opens dialogs, saves
+// forms and prints what the page shows, plus page and console errors. Screenshots go to OUT/shots.
+// Dates are relative to today, so compare two builds on the same day, not against old output.
+const puppeteer = require('puppeteer');
+const fs = require('fs');
+const BASE = process.env.BASE;
+const OUT = process.env.OUT ?? '/out';
+const iso = (d) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);
+const errors = [];
+const log = (...a) => console.log(...a);
+// A one-page PDF for the attachment uploads
+const pdf = '/tmp/sample.pdf';
+const PDF = [
+  '%PDF-1.4',
+  '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+  '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj',
+  '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj',
+  'trailer<</Root 1 0 R>>',
+  '%%EOF',
+].join('\n');
+
+async function api(token, method, path, body) {
+  const res = await fetch(BASE + path, {
+    method, headers: { ...(token && { Authorization: token }), ...(body && { 'Content-Type': 'application/json' }) },
+    body: body && JSON.stringify(body),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`${method} ${path} -> ${res.status} ${text}`);
+  return text ? JSON.parse(text) : null;
+}
+const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`;
+
+(async () => {
+  fs.mkdirSync(`${OUT}/shots`, { recursive: true });
+  fs.writeFileSync(pdf, PDF);
+  const auth = await api('', 'POST', '/api/collections/users/auth-with-password', { identity: process.env.ADMIN_USERNAME, password: process.env.ADMIN_PASSWORD });
+  const T = auth.token;
+  // Fresh data
+  for (const c of (await api(T, 'GET', `${rec('cars')}?perPage=200`)).items) await api(T, 'DELETE', rec('cars', c.id));
+  const car = await api(T, 'POST', rec('cars'), { owner: auth.record.id, make: 'Skoda', model: 'Octavia', mileage: 19000, plate: 'ZH 1', info: { nextInspection: iso(3), purchasePrice: 20000, purchaseDate: '2024-03-01' } });
+  const car2 = await api(T, 'POST', rec('cars'), { owner: auth.record.id, make: 'Toyota', model: 'Yaris', mileage: 52000 });
+  const year = iso(0).slice(0, 4);
+  for (const [d, km, type, cost, c] of [[-400, 4000, 'service', 300, car], [-90, 10000, 'service', 250, car], [-60, 12000, 'fuel', 80, car], [-30, 15000, 'repair', 900, car], [-10, 18000, 'fuel', 70, car], [-20, 50000, 'tires', 600, car2], [-200, 45000, 'fuel', 60, car2]]) {
+    await api(T, 'POST', rec('entries'), { car: c.id, type, date: iso(d), mileage: km, title: `${type} ${d}`, cost });
+  }
+  await api(T, 'POST', rec('reminders'), { car: car.id, title: 'Oil', type: 'service', intervalKm: 15000, dueKm: 19500, dueDate: iso(200) });
+  await api(T, 'POST', rec('reminders'), { car: car.id, title: 'Tyres', type: 'tires', intervalMonths: 6, dueDate: iso(-2) });
+  await api(T, 'POST', rec('reminders'), { car: car2.id, title: 'Oil', type: 'service', intervalMonths: 12, dueDate: iso(9) });
+
+  const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+  const ctx = await browser.createBrowserContext();
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error' && !m.text().includes('Cross-Origin-Opener-Policy')) errors.push(`console: ${m.text()}`); });
+  page.on('dialog', (d) => { log('dialog:', d.message()); d.accept(); });
+  await page.setViewport({ width: 1280, height: 900 });
+  await page.goto(BASE, { waitUntil: 'networkidle0' });
+  await page.evaluate((a) => localStorage.setItem('carmaint:auth', JSON.stringify(a)), { token: T, record: auth.record });
+  await page.reload({ waitUntil: 'networkidle0' });
+  const shot = async (name) => { await new Promise((r) => setTimeout(r, 400)); await page.screenshot({ path: `${OUT}/shots/${name}.png`, fullPage: true }); };
+  const go = async (hash, name) => { await page.evaluate((h) => { location.hash = h; }, hash); await shot(name); };
+  const text = (sel) => page.$eval(sel, (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => '(missing)');
+
+  await go('#/', 'home');
+  log('home due:', await text('#due'));
+  log('home hero:', await text('.hero'));
+  await go(`#/car/${car.id}`, 'car');
+  log('car tiles:', await text('.tiles'));
+  log('car reminders:', await text('.rem-panel'));
+  await go(`#/costs/${car.id}`, 'costs-car');
+  log('costs car tiles:', await text('.costs-tiles'));
+  await go('#/costs', 'costs-all');
+  log('costs all tiles:', await text('.costs-tiles'));
+  await page.evaluate(() => { document.querySelector('[name="costYear"][value="all"]')?.click(); });
+  await shot('costs-all-years');
+  log('costs all-years tiles:', await text('.costs-tiles'));
+  await go('#/settings/notify', 'settings-notify');
+  await new Promise((r) => setTimeout(r, 800));
+  log('notify preview:', await text('#notifyPreview'));
+  await page.type('#notifyForm [name="pushUrl"]', 'ntfy://ntfy.sh/test');
+  await page.click('#notifyForm [name="pushEnabled"]');
+  await page.evaluate(() => document.querySelector('#notifyForm [name="before"][value="30"]').click());
+  await new Promise((r) => setTimeout(r, 1500));
+  log('notify preview on:', (await text('#notifyPreview')).replace(/^Next notification: \S+ \S+ /, ''));
+  log('notify segments:', await page.evaluate(() => [...document.querySelectorAll('#notifyForm .segmented input:checked')].map((i) => `${i.name}=${i.value}`).join(' ')));
+  await go('#/settings/display', 'settings-display');
+
+  // Dialogs: add reminder, complete a reminder (entry dialog), add document with reminder
+  await go(`#/car/${car.id}`, 'car2');
+  await page.evaluate((id) => document.querySelector(`[data-action="add-reminder"][data-id="${id}"]`).click(), car.id);
+  await page.type('#reminderForm [name="title"]', 'Wipers');
+  await page.type('#reminderForm [name="intervalMonths"]', '12');
+  await page.click('#reminderForm [type="submit"]');
+  await new Promise((r) => setTimeout(r, 800));
+  log('after reminder add:', await text('.rem-panel'));
+
+  await page.evaluate(() => document.querySelector('.rem-panel [data-action="reminder-done"]').click());
+  await new Promise((r) => setTimeout(r, 300));
+  log('entry dialog title:', await text('#entryDialogTitle'), '| remind due:', await text('#remindDue'));
+  await page.click('#entryForm [type="submit"]:not(#saveNext)');
+  await new Promise((r) => setTimeout(r, 1200));
+  log('after done:', await text('.rem-panel'));
+
+  await page.evaluate((id) => document.querySelector(`[data-action="add-document"][data-id="${id}"]`).click(), car.id);
+  await page.$eval('#docForm [name="validUntil"]', (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, iso(20));
+  await (await page.$('#docInput')).uploadFile(pdf);
+  await page.click('#docForm [type="submit"]');
+  await new Promise((r) => setTimeout(r, 2500));
+  log('after doc:', await text('.rem-panel'), '| docs:', await text('.doc-list'));
+  await shot('car-after');
+
+  // Edit document: remove its file, then delete it (cascade reminder)
+  await page.evaluate(() => document.querySelector('[data-action="edit-document"]').click());
+  await new Promise((r) => setTimeout(r, 300));
+  await page.evaluate(() => document.querySelector('#docFiles [data-remove]')?.click());
+  await page.click('#docForm [type="submit"]');
+  await new Promise((r) => setTimeout(r, 1500));
+  log('doc after file removed:', await text('.doc-list'));
+  await page.evaluate(() => document.querySelector('[data-action="edit-document"]').click());
+  await new Promise((r) => setTimeout(r, 300));
+  await page.click('#docDelete');
+  await new Promise((r) => setTimeout(r, 1500));
+  log('after doc delete:', await text('.rem-panel'), '| docs:', await text('.doc-list'));
+
+  // Complete the MFK from the vehicle data (moves 24 months forward)
+  await page.evaluate((id) => document.querySelector(`[data-action="reminder-done"][data-id="mfk:${id}"]`).click(), car.id);
+  await new Promise((r) => setTimeout(r, 300));
+  log('mfk remind due:', await text('#remindDue'));
+  await page.click('#entryForm [type="submit"]:not(#saveNext)');
+  await new Promise((r) => setTimeout(r, 1500));
+  log('after mfk done:', await text('.rem-panel'), '| info:', await text('#infobox'));
+
+  // Entry with attachment, then delete
+  await page.evaluate((id) => document.querySelector(`[data-action="add-entry"][data-id="${id}"]`).click(), car.id);
+  await page.type('#entryForm [name="title"]', 'Brake pads');
+  await page.type('#entryForm [name="cost"]', '400');
+  await (await page.$('#attInput')).uploadFile(pdf);
+  await page.click('#entryForm [type="submit"]:not(#saveNext)');
+  await new Promise((r) => setTimeout(r, 2500));
+  log('history:', (await text('#entries')).slice(0, 200));
+
+  // Phone
+  await page.setViewport({ width: 390, height: 844, isMobile: true });
+  await go(`#/car/${car.id}`, 'phone-car');
+  log('phone reminders:', await text('.rem-panel'));
+  await go('#/', 'phone-home');
+
+  // Delete car (cascade)
+  await page.setViewport({ width: 1280, height: 900 });
+  await go(`#/car/${car2.id}`, 'car-del');
+  await page.evaluate((id) => document.querySelector(`[data-action="delete-car"][data-id="${id}"]`).click(), car2.id);
+  await new Promise((r) => setTimeout(r, 1500));
+  log('after car delete home:', await text('#due'));
+
+  // Photos: upload two, make the second the cover, delete one
+  await go(`#/car/${car.id}`, 'car-photos');
+  for (const color of ['#c33', '#33c']) {
+    await page.evaluate(async (c) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64; canvas.height = 48;
+      const g = canvas.getContext('2d'); g.fillStyle = c; g.fillRect(0, 0, 64, 48);
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg'));
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], `photo${c.slice(1)}.jpg`, { type: 'image/jpeg' }));
+      const input = document.querySelector('input[data-upload="car-photos"]');
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, color);
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  const photoCount = () => page.evaluate(() => document.querySelectorAll('.photo-grid .thumb:not(.add)').length);
+  log('photos:', await photoCount());
+  await page.evaluate(() => document.querySelector('[data-action="cover-photo"]').click());
+  await new Promise((r) => setTimeout(r, 1000));
+  log('cover is 2nd:', await page.evaluate(() => document.querySelector('.photo-grid .thumb [data-action="delete-photo"]').dataset.photo.startsWith('photo33c')));
+  await page.evaluate(() => document.querySelector('[data-action="delete-photo"]').click());
+  await new Promise((r) => setTimeout(r, 1000));
+  log('photos after delete:', await photoCount());
+  await shot('car-photos-after');
+
+  // Import a backup (replaces all cars)
+  await page.evaluate(() => importBackup({
+    version: 2, cars: [{ id: 'x', make: 'Imp', model: 'Ort', mileage: 1000, photos: [] }],
+    entries: [{ carId: 'x', type: 'service', date: '2026-01-01', title: 'Imp entry', cost: 10, mileage: 500 }],
+    reminders: [{ carId: 'x', title: 'Imp rem', type: 'service', intervalMonths: 12, dueDate: '2026-12-01' }],
+    documents: [{ carId: 'x', kind: 'insurance', title: 'Ins', validUntil: '2026-12-20', remind: true }],
+  }));
+  await new Promise((r) => setTimeout(r, 1500));
+  await shot('after-import');
+  log('after import home:', await text('#due'), '| cards:', await text('.grid'));
+
+  await browser.close();
+  log('ERRORS:', errors.length ? `\n${errors.join('\n')}` : 'none');
+})().catch((e) => { console.error('FAILED', e); console.log('ERRORS so far:', errors); process.exit(1); });
