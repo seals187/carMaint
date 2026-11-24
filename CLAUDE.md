@@ -16,9 +16,11 @@ Switzerland (CHF, MFK, Stammnummer, Typengenehmigung).
 | Path | Purpose |
 |---|---|
 | `pb_public/` | Frontend: `index.html`, `style.css`, `i18n.js`, `app.js` – plain JS, **no framework, no build step, no external requests** |
-| `pb_public/core.js` | Pure domain rules (no DOM, no texts, no PocketBase), shared: global `CarMaint` in the browser, `require(\`${__hooks}/../pb_public/core.js\`)` in hooks. Reminder rules live here only |
+| `pb_public/core.js` | Pure domain rules (no DOM, no texts, no PocketBase), shared: global `CarMaint` in the browser, `require(\`${__hooks}/../pb_public/core.js\`)` in hooks |
 | `pb_public/store.js` | Record store (global `CarMaintStore`): the only way to write cars, entries, reminders, documents – `store.save/remove/upload` keep `db`, dependent records and the file cache in sync |
-| `test/` | `node --test` tests for the pure modules |
+| `test/` | `node --test` checks: syntax, pure modules, UI texts, frontend rules. Node runs every `.js` under `test/`, so no helpers or non-test scripts there |
+| `e2e/` | Before/after browser and API comparison of two builds (`e2e/compare.sh`) |
+| `CODING_STANDARDS.md` | Review rules that need judgement |
 | `pb_public/fonts/` | Anton font subset (A–Z, SIL OFL) for the text logo |
 | `pb_migrations/` | PocketBase schema and API rules (JS migrations) |
 | `pb_hooks/` | Server logic: `config.js` reads `.env`; `carmaint.pb.js` creates the admin, applies settings, serves `GET /api/carmaint/config`; `notify.js` sends the daily reminder mails (cron); `storage.js` storage usage; `previews.js` renders PDF previews with poppler; `backup.js` automatic server backups (schedule in `pb_data/carmaint-backup.json`, set by admins in the UI, not in `.env`); `access.js` who may do what (admin, backup, notify, demo restrictions) |
@@ -55,19 +57,18 @@ manage users. Files are `protected` and fetched with a short-lived file token.
 - Auth is rate-limited (≈2 requests / 3 s) – keep that in mind when testing logins.
 - The server sanitizes file names (umlauts, spaces) – original names live in `attachmentNames`.
 - Number fields return `0` and text fields `""` when empty.
+- Users matching a collection's **manage rule** (admins on `users`) skip PocketBase's own checks such
+  as `oldPassword`; hooks enforce those themselves.
 
 ## Testing
 
-Unit tests cover the pure modules (`pb_public/core.js`, …); the UI is tested by hand. Before pushing changes, at least:
-
-```bash
-node --check pb_public/*.js pb_hooks/*.js && node --test   # e.g. via docker run node:22-alpine
-docker build -t carmaint:test .
-docker run --rm -p 8090:8090 -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=test1234 carmaint:test
-```
-
-Then check in a browser: login, add car with photo, add entry with PDF, vehicle data, all languages,
-light/dark mode, mobile width. Validate workflows with `actionlint`.
+- `scripts/check.sh` – all `node --test` checks (local Node 22+ or Docker); CI runs them before every build.
+- `e2e/compare.sh [BASE_REF] [NEW_REF]` – for changes to behaviour or refactors: builds `main` and the
+  working tree, walks the UI and the guarded API routes in both and diffs the output. Every difference
+  must be intended.
+- By hand in a browser (`docker run --rm -p 8090:8090 -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=test1234 <image>`):
+  all languages, light/dark mode, mobile width – the e2e run covers English, light, desktop and phone.
+- Workflows: `actionlint`.
 
 ## Releases
 
