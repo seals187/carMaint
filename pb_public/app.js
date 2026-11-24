@@ -11,7 +11,6 @@ const CAR_PHOTO_MAX = 1600;               // px, longest side
 const ATTACHMENT_MAX = 2000;              // receipts slightly larger so text stays readable
 const GITHUB_URL = 'https://github.com/seals187/carmaint';
 const COPYRIGHT_SINCE = 2026;
-const UPLOAD_CHUNK = 24 * 1024 * 1024;    // stay below the server limit (32 MB) per request
 
 const CURRENCIES = {
   EUR: { locale: 'de-DE' },
@@ -263,39 +262,8 @@ async function api(method, path, body) {
   return data;
 }
 
+// Only for users; cars, entries, reminders and documents go through the store (store.js).
 const rec = (collection, id = '') => `/api/collections/${collection}/records${id ? `/${id}` : ''}`;
-
-async function listAll(collection, query = '') {
-  const items = [];
-  for (let page = 1; ; page++) {
-    const res = await api('GET', `${rec(collection)}?page=${page}&perPage=500${query}`);
-    items.push(...res.items);
-    if (page >= res.totalPages) return items;
-  }
-}
-
-// Files are attached in batches so a single request never gets too large.
-async function uploadFiles(collection, id, field, files) {
-  let record = null;
-  let batch = new FormData();
-  let size = 0;
-  let count = 0;
-  const flush = async () => {
-    if (!count) return;
-    record = await api('PATCH', rec(collection, id), batch);
-    batch = new FormData();
-    size = 0;
-    count = 0;
-  };
-  for (const f of files) {
-    if (count && size + f.blob.size > UPLOAD_CHUNK) await flush();
-    batch.append(`${field}+`, f.blob, f.name);
-    size += f.blob.size;
-    count++;
-  }
-  await flush();
-  return record;
-}
 
 /* ---------- Protected files ---------- */
 
@@ -343,6 +311,9 @@ function forgetFiles(prefix = '') {
   }
 }
 
+// All cached files of a record, or one of its files (every thumbnail size)
+const forgetRecordFiles = (list, id, name = '') => forgetFiles(name ? `${list}/${id}/${name}|` : `${list}/${id}/`);
+
 // Images are rendered as <img data-file="…" data-thumb="…"> and loaded here.
 function hydrate() {
   for (const img of document.querySelectorAll('img[data-file]:not([data-loading])')) {
@@ -363,13 +334,13 @@ const docFile = (doc, name) => `documents/${doc.id}/${name}`;
 // names (the server sanitizes file names).
 async function uploadAttachments(entry, files, collection = 'entries') {
   const before = new Set(entry.attachments);
-  const updated = await uploadFiles(collection, entry.id, 'attachments', files);
+  const updated = await store.upload(collection, entry.id, 'attachments', files);
   const names = {};
   for (const name of updated.attachments) {
     if (entry.attachmentNames?.[name]) names[name] = entry.attachmentNames[name];
   }
   updated.attachments.filter((name) => !before.has(name)).forEach((name, i) => { names[name] = files[i]?.name ?? name; });
-  return api('PATCH', rec(collection, entry.id), { attachmentNames: names });
+  return store.save(collection, { attachmentNames: names }, entry.id);
 }
 
 const MIME_EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif', 'image/bmp': '.bmp', 'image/avif': '.avif', 'application/pdf': '.pdf' };
@@ -437,19 +408,15 @@ function openFile(url, name, download = !/\.pdf$/i.test(name)) {
 
 let serverConfig = { appName: 'CarMaint', defaultCurrency: 'EUR', defaultLanguage: 'en', version: 'dev', maxFileSizeMB: 20, storageLimitMB: 0,
   fileTypes: { attachments: ['application/pdf', 'image/jpeg'], photos: ['image/jpeg'] } };
-let db = { cars: [], entries: [], reminders: [], documents: [] };
+// The user's cars, entries, reminders and documents. Read from db; write only
+// through store.save / store.remove / store.upload (they keep db and the file cache in sync).
+const store = CarMaintStore.createStore({ request: api, forget: forgetRecordFiles });
+const db = store.db;
 
-async function loadData() {
-  const [cars, entries, reminders, documents] = await Promise.all([
-    listAll('cars', '&sort=created'), listAll('entries'), listAll('reminders'), listAll('documents', '&sort=created'),
-  ]);
-  db = { cars, entries, reminders, documents };
-}
-
-const carById = (id) => db.cars.find((c) => c.id === id);
-const entryById = (id) => db.entries.find((e) => e.id === id);
-const reminderById = (id) => db.reminders.find((r) => r.id === id);
-const documentById = (id) => db.documents.find((d) => d.id === id);
+const carById = (id) => store.byId('cars', id);
+const entryById = (id) => store.byId('entries', id);
+const reminderById = (id) => store.byId('reminders', id);
+const documentById = (id) => store.byId('documents', id);
 
 // Size, page count and preview pages of an attachment (created by the server)
 const fileMeta = (record, name) => record?.fileInfo?.[name] ?? {};
@@ -539,27 +506,17 @@ async function moveLegacyDocuments() {
   for (const entry of db.entries.filter((e) => e.type === 'documents')) {
     let doc = null;
     try {
-      doc = await api('POST', rec('documents'), { car: entry.car, kind: guessDocKind(entry.title), title: entry.title });
+      doc = await store.save('documents', { car: entry.car, kind: guessDocKind(entry.title), title: entry.title });
       const files = await Promise.all(entry.attachments.map(async (name) => ({
         blob: await fetchFile(entryFile(entry, name)), name: attachmentLabel(entry, name),
       })));
       if (files.length) doc = await uploadAttachments(doc, files, 'documents');
-      await api('DELETE', rec('entries', entry.id));
-      db.entries = db.entries.filter((e) => e.id !== entry.id);
-      upsertLocal('documents', doc);
+      await store.remove('entries', entry.id);
     } catch (err) {
       console.warn('Document entry could not be moved', err);
-      if (doc) await api('DELETE', rec('documents', doc.id)).catch(() => {});
+      if (doc) await store.remove('documents', doc.id).catch(() => {});
     }
   }
-}
-
-function upsertLocal(list, record) {
-  const items = db[list];
-  const i = items.findIndex((r) => r.id === record.id);
-  if (i >= 0) items[i] = record;
-  else items.push(record);
-  return record;
 }
 
 /* ---------- Language ---------- */
@@ -634,7 +591,7 @@ async function enterApp() {
   infoCollapsed = defaultInfoCollapsed();
   dueCollapsed = defaultDueCollapsed();
   currentCarId = null;
-  await loadData();
+  await store.load();
   route();
   if (db.entries.some((e) => e.type === 'documents')) {
     await moveLegacyDocuments();
@@ -644,7 +601,7 @@ async function enterApp() {
 
 function resetSession() {
   setAuth(null);
-  db = { cars: [], entries: [], reminders: [], documents: [] };
+  store.reset();
   forgetFiles();
   fileTokenCache = { promise: null, at: 0 };
   document.querySelectorAll('dialog[open]').forEach((d) => d.close());
@@ -1289,7 +1246,7 @@ async function renderUsers() {
   try {
     // Storage per user is optional – the list still shows if it cannot be loaded.
     const [users, storage] = await Promise.all([
-      listAll('users', '&sort=username'),
+      store.listAll('users', '&sort=username'),
       api('GET', '/api/carmaint/usage/users').catch(() => null),
     ]);
     if (!card.isConnected) return;
@@ -2189,11 +2146,8 @@ carForm.addEventListener('submit', (ev) => {
       plate: f.plate.trim().toUpperCase(),
       mileage: num(f.mileage),
     };
-    let car = f.id
-      ? await api('PATCH', rec('cars', f.id), data)
-      : await api('POST', rec('cars'), { ...data, owner: me().id });
-    if (photos.length) car = await uploadFiles('cars', car.id, 'photos', photos);
-    upsertLocal('cars', car);
+    let car = await store.save('cars', f.id ? data : { ...data, owner: me().id }, f.id);
+    if (photos.length) car = await store.upload('cars', car.id, 'photos', photos);
     carDialog.close();
     if (!f.id) location.hash = `#/car/${car.id}`;
     route();
@@ -2421,7 +2375,7 @@ entryDialog.addEventListener('close', clearDraft);
 
 async function bumpMileage(car, mileage) {
   if (mileage && mileage > (car.mileage || 0)) {
-    upsertLocal('cars', await api('PATCH', rec('cars', car.id), { mileage }));
+    await store.save('cars', { mileage }, car.id);
   }
 }
 
@@ -2433,14 +2387,11 @@ async function scheduleReminder(car, entry, next, completed) {
     const info = { ...car.info, lastInspection: entry.date };
     if (next?.months) info.nextInspection = addMonths(entry.date, next.months);
     else delete info.nextInspection;
-    upsertLocal('cars', await api('PATCH', rec('cars', car.id), { info }));
+    await store.save('cars', { info }, car.id);
     return;
   }
   if (!next?.km && !next?.months) {
-    if (r) {
-      await api('DELETE', rec('reminders', r.id));
-      db.reminders = db.reminders.filter((x) => x.id !== r.id);
-    }
+    if (r) await store.remove('reminders', r.id);
     return;
   }
   const same = (x) => x.car === car.id && x.title.trim().toLowerCase() === entry.title.trim().toLowerCase();
@@ -2454,9 +2405,7 @@ async function scheduleReminder(car, entry, next, completed) {
     dueKm: next.km ? (entry.mileage || car.mileage || 0) + next.km : 0,
     dueDate: next.months ? addMonths(entry.date, next.months) : '',
   };
-  upsertLocal('reminders', target
-    ? await api('PATCH', rec('reminders', target.id), data)
-    : await api('POST', rec('reminders'), { ...data, car: car.id }));
+  await store.save('reminders', target ? data : { ...data, car: car.id }, target?.id);
 }
 
 // "Save & add another": keep car, date, mileage and workshop, clear the rest.
@@ -2492,12 +2441,8 @@ entryForm.addEventListener('submit', (ev) => {
       data.attachmentNames = Object.fromEntries(Object.entries(existing.attachmentNames ?? {}).filter(([name]) => !removed.includes(name)));
     }
 
-    let entry = existing
-      ? await api('PATCH', rec('entries', existing.id), data)
-      : await api('POST', rec('entries'), { ...data, car: f.car });
+    let entry = await store.save('entries', existing ? data : { ...data, car: f.car }, existing?.id);
     if (files.length) entry = await uploadAttachments(entry, files);
-    upsertLocal('entries', entry);
-    removed.forEach((name) => forgetFiles(entryFile(entry, name)));
 
     await bumpMileage(carById(f.car), data.mileage);
     if (Array.isArray(draft.reminder)) {
@@ -2582,7 +2527,7 @@ infoForm.addEventListener('submit', (ev) => {
       if (pins.length < PIN_MIN || pins.length > PIN_MAX) throw new Error(t('info.shownError', { min: PIN_MIN, max: PIN_MAX }));
       info.pinned = pins;
     }
-    upsertLocal('cars', await api('PATCH', rec('cars', form.get('carId')), { info }));
+    await store.save('cars', { info }, form.get('carId'));
     if (info.pinned) infoCollapsed = true;
     infoDialog.close();
     route();
@@ -2625,9 +2570,7 @@ reminderForm.addEventListener('submit', (ev) => {
       dueDate: f.dueDate || (intervalMonths ? addMonths(today(), intervalMonths) : ''),
     };
     if (!data.dueKm && !data.dueDate) throw new Error(t('rem.needDue'));
-    upsertLocal('reminders', f.id
-      ? await api('PATCH', rec('reminders', f.id), data)
-      : await api('POST', rec('reminders'), { ...data, car: car.id }));
+    await store.save('reminders', f.id ? data : { ...data, car: car.id }, f.id);
     reminderDialog.close();
     route();
     toast(t('toast.reminderSaved'));
@@ -2638,8 +2581,7 @@ $('#reminderDelete').addEventListener('click', () => {
   const r = reminderById(reminderForm.elements.namedItem('id').value);
   if (!r || !confirm(t('confirm.deleteReminder', { title: r.title }))) return;
   runAction(async () => {
-    await api('DELETE', rec('reminders', r.id));
-    db.reminders = db.reminders.filter((x) => x.id !== r.id);
+    await store.remove('reminders', r.id);
     reminderDialog.close();
     route();
     toast(t('toast.reminderDeleted'));
@@ -2740,17 +2682,11 @@ async function syncDocReminder(doc, remind) {
   const current = doc.reminder && reminderById(doc.reminder);
   if (remind && doc.validUntil) {
     const data = { title: t('doc.reminderTitle', { title: doc.title }), type: 'documents', intervalKm: 0, intervalMonths: 0, dueKm: 0, dueDate: addDays(doc.validUntil, -DOC_REMIND_DAYS) };
-    const r = current
-      ? await api('PATCH', rec('reminders', current.id), data)
-      : await api('POST', rec('reminders'), { ...data, car: doc.car });
-    upsertLocal('reminders', r);
-    return r.id === doc.reminder ? doc : api('PATCH', rec('documents', doc.id), { reminder: r.id });
+    const r = await store.save('reminders', current ? data : { ...data, car: doc.car }, current?.id);
+    return r.id === doc.reminder ? doc : store.save('documents', { reminder: r.id }, doc.id);
   }
-  if (current) {
-    await api('DELETE', rec('reminders', current.id));
-    db.reminders = db.reminders.filter((r) => r.id !== current.id);
-  }
-  return doc.reminder ? api('PATCH', rec('documents', doc.id), { reminder: '' }) : doc;
+  if (current) await store.remove('reminders', current.id);
+  return doc.reminder ? store.save('documents', { reminder: '' }, doc.id) : doc;
 }
 
 docForm.addEventListener('submit', (ev) => {
@@ -2765,13 +2701,9 @@ docForm.addEventListener('submit', (ev) => {
       data['attachments-'] = removed;
       data.attachmentNames = Object.fromEntries(Object.entries(existing.attachmentNames ?? {}).filter(([name]) => !removed.includes(name)));
     }
-    let doc = existing
-      ? await api('PATCH', rec('documents', existing.id), data)
-      : await api('POST', rec('documents'), { ...data, car: f.car });
+    let doc = await store.save('documents', existing ? data : { ...data, car: f.car }, existing?.id);
     if (files.length) doc = await uploadAttachments(doc, files, 'documents');
-    doc = await syncDocReminder(doc, !!f.remind);
-    upsertLocal('documents', doc);
-    removed.forEach((name) => forgetFiles(docFile(doc, name)));
+    await syncDocReminder(doc, !!f.remind);
     docDialog.close();
     route();
     toast(existing ? t('toast.docUpdated') : t('toast.docSaved'));
@@ -2782,13 +2714,7 @@ $('#docDelete').addEventListener('click', () => {
   const doc = documentById(docForm.elements.namedItem('id').value);
   if (!doc || !confirm(t('confirm.deleteDoc', { title: doc.title }))) return;
   runAction(async () => {
-    if (doc.reminder) {
-      await api('DELETE', rec('reminders', doc.reminder)).catch(() => {});
-      db.reminders = db.reminders.filter((r) => r.id !== doc.reminder);
-    }
-    await api('DELETE', rec('documents', doc.id));
-    db.documents = db.documents.filter((d) => d.id !== doc.id);
-    forgetFiles(`documents/${doc.id}/`);
+    await store.remove('documents', doc.id);
     docDialog.close();
     route();
     toast(t('toast.docDeleted'));
@@ -2845,7 +2771,7 @@ quickForm.addEventListener('submit', (ev) => {
   withBusy(quickForm, async () => {
     const f = Object.fromEntries(new FormData(quickForm));
     const car = carById(f.car);
-    let entry = await api('POST', rec('entries'), {
+    let entry = await store.save('entries', {
       car: car.id,
       type: f.type,
       date: today(),
@@ -2854,7 +2780,6 @@ quickForm.addEventListener('submit', (ev) => {
       cost: num(f.cost),
     });
     if (quickPhoto) entry = await uploadAttachments(entry, [await prepareFile(quickPhoto, ATTACHMENT_MAX, serverConfig.fileTypes.attachments)]);
-    upsertLocal('entries', entry);
     await bumpMileage(car, entry.mileage);
     quickDialog.close();
     route();
@@ -3161,12 +3086,7 @@ document.addEventListener('click', (ev) => {
       const entries = tn('count.entries', entriesFor(id).length);
       if (!confirm(t('confirm.deleteCar', { car: `${car.make} ${car.model}`, entries }))) return;
       runAction(async () => {
-        await api('DELETE', rec('cars', id));
-        db.cars = db.cars.filter((c) => c.id !== id);
-        db.entries = db.entries.filter((e) => e.car !== id);
-        db.reminders = db.reminders.filter((r) => r.car !== id);
-        db.documents = db.documents.filter((d) => d.car !== id);
-        forgetFiles(`cars/${id}/`);
+        await store.remove('cars', id);
         location.hash = '#/';
         route();
         toast(t('toast.carDeleted'));
@@ -3216,7 +3136,7 @@ document.addEventListener('click', (ev) => {
       runAction(async () => {
         const car = carById(id);
         const photos = [el.dataset.photo, ...car.photos.filter((p) => p !== el.dataset.photo)];
-        upsertLocal('cars', await api('PATCH', rec('cars', id), { photos }));
+        await store.save('cars', { photos }, id);
         route();
         toast(t('toast.coverChanged'));
       });
@@ -3224,8 +3144,7 @@ document.addEventListener('click', (ev) => {
     case 'delete-photo':
       if (!confirm(t('confirm.deletePhoto'))) return;
       runAction(async () => {
-        upsertLocal('cars', await api('PATCH', rec('cars', id), { 'photos-': [el.dataset.photo] }));
-        forgetFiles(`cars/${id}/${el.dataset.photo}|`);
+        await store.save('cars', { 'photos-': [el.dataset.photo] }, id);
         route();
         toast(t('toast.photoDeleted'));
       });
@@ -3266,9 +3185,7 @@ document.addEventListener('click', (ev) => {
       const entry = entryById(id);
       if (!confirm(t('confirm.deleteEntry', { title: entry.title }))) return;
       runAction(async () => {
-        await api('DELETE', rec('entries', id));
-        db.entries = db.entries.filter((e) => e.id !== id);
-        forgetFiles(`entries/${id}/`);
+        await store.remove('entries', id);
         route();
         toast(t('toast.entryDeleted'));
       });
@@ -3389,7 +3306,7 @@ document.addEventListener('change', async (ev) => {
     files.forEach((file) => checkFileType(file, serverConfig.fileTypes.photos));
     toast(tn('toast.photosUploading', files.length), 0);
     const prepared = await Promise.all(files.map((file) => prepareFile(file, CAR_PHOTO_MAX, serverConfig.fileTypes.photos)));
-    upsertLocal('cars', await uploadFiles('cars', input.dataset.id, 'photos', prepared));
+    await store.upload('cars', input.dataset.id, 'photos', prepared);
     route();
     toast(tn('toast.photosAdded', files.length));
   });
@@ -3472,7 +3389,7 @@ async function importBackup(data) {
   try {
     for (const c of data.cars) {
       progress();
-      let car = await api('POST', rec('cars'), {
+      let car = await store.save('cars', {
         owner: me().id,
         make: str(c.make) || '?',
         model: str(c.model) || '?',
@@ -3483,14 +3400,14 @@ async function importBackup(data) {
       });
       created.push(car.id);
       const photos = await filesOf(c.photos, (id) => fileOf(id, 'photo', serverConfig.fileTypes.photos));
-      if (photos.length) car = await uploadFiles('cars', car.id, 'photos', photos);
+      if (photos.length) car = await store.upload('cars', car.id, 'photos', photos);
       carIds.set(c.id, car.id);
     }
     for (const e of data.entries) {
       progress();
       const car = carIds.get(e.carId);
       if (!car) continue;
-      const entry = await api('POST', rec('entries'), {
+      const entry = await store.save('entries', {
         car,
         type: TYPES[e.type] ? e.type : 'other',
         date: /^\d{4}-\d{2}-\d{2}$/.test(e.date) ? e.date : today(),
@@ -3507,7 +3424,7 @@ async function importBackup(data) {
     for (const r of Array.isArray(data.reminders) ? data.reminders : []) {
       const car = carIds.get(r.carId);
       if (!car) continue;
-      await api('POST', rec('reminders'), {
+      await store.save('reminders', {
         car,
         title: str(r.title) || t('import.entryFallback'),
         type: TYPES[r.type] ? r.type : 'other',
@@ -3521,7 +3438,7 @@ async function importBackup(data) {
     for (const d of Array.isArray(data.documents) ? data.documents : []) {
       const car = carIds.get(d.carId);
       if (!car) continue;
-      let doc = await api('POST', rec('documents'), {
+      let doc = await store.save('documents', {
         car,
         kind: DOC_KINDS.includes(d.kind) ? d.kind : 'other',
         title: str(d.title) || t('docs.title'),
@@ -3533,15 +3450,15 @@ async function importBackup(data) {
     }
   } catch (err) {
     // Remove partially imported data; the existing data stays untouched.
-    for (const id of created) await api('DELETE', rec('cars', id)).catch(() => {});
+    for (const id of created) await store.remove('cars', id).catch(() => {});
     throw new Error(t('err.importAborted', { message: err.message }));
   }
 
   // Only remove the previous vehicles after a successful import.
-  for (const id of oldCars) await api('DELETE', rec('cars', id)).catch(() => {});
+  for (const id of oldCars) await store.remove('cars', id).catch(() => {});
   if (CURRENCIES[data.settings?.currency]) await saveSettings({ currency: data.settings.currency });
   forgetFiles();
-  await loadData();
+  await store.load();
   await moveLegacyDocuments(); // backups from before 0.2
   location.hash = '#/';
   route();

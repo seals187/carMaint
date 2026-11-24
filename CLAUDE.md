@@ -17,6 +17,7 @@ Switzerland (CHF, MFK, Stammnummer, Typengenehmigung).
 |---|---|
 | `pb_public/` | Frontend: `index.html`, `style.css`, `i18n.js`, `app.js` – plain JS, **no framework, no build step, no external requests** |
 | `pb_public/core.js` | Pure domain rules (no DOM, no texts, no PocketBase), shared: global `CarMaint` in the browser, `require(\`${__hooks}/../pb_public/core.js\`)` in hooks. Reminder rules live here only |
+| `pb_public/store.js` | Record store (global `CarMaintStore`): the only way to write cars, entries, reminders, documents – `store.save/remove/upload` keep `db`, dependent records and the file cache in sync |
 | `test/` | `node --test` tests for the pure modules |
 | `pb_public/fonts/` | Anton font subset (A–Z, SIL OFL) for the text logo |
 | `pb_migrations/` | PocketBase schema and API rules (JS migrations) |
