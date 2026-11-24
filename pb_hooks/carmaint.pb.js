@@ -254,6 +254,16 @@ onRecordUpdateRequest((e) => {
     if (locked.some((key) => body[key] !== undefined)) {
       throw new ForbiddenError('Not allowed for the demo user.');
     }
+    // PocketBase skips the old-password check for users matching the manage rule
+    // (admins), so check it here for everyone changing their own password.
+    if (body.password !== undefined) {
+      const stored = e.app.findRecordById('users', e.record.id);
+      if (!body.oldPassword || !stored.validatePassword(String(body.oldPassword))) {
+        throw new BadRequestError('Failed to update record.', {
+          oldPassword: new ValidationError('validation_invalid_old_password', 'Missing or invalid old password.'),
+        });
+      }
+    }
   }
   return e.next();
 }, 'users');

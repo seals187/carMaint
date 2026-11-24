@@ -13,6 +13,9 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - "Per km" on the overview and the car page is now labelled "excl. fuel" (on the car cards as a tooltip); the cost
   analysis keeps its per-km figure including fuel.
 
+### Fixed
+- Admins changing their own password now have to enter the current one correctly, like everyone else.
+
 ## [0.2.10] – 2026-10-30
 
 ### Added
