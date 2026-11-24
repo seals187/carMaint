@@ -6,6 +6,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.2.11] – 2026-11-24
+
 ### Changed
 - Reminders by mileage: the website and the reminder notifications now estimate the due date the same way, from the
   km the car actually drives (its oldest entry with a mileage), or 15'000 km per year until that is known. Before,
@@ -222,7 +224,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.10...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.11...HEAD
+[0.2.11]: https://github.com/seals187/carMaint/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/seals187/carMaint/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/seals187/carMaint/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/seals187/carMaint/compare/v0.2.7...v0.2.8
