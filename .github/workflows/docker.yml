@@ -22,7 +22,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Syntax, unit tests, UI texts and frontend rules: the same as scripts/check.sh, on Node 22
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Run checks
+        run: docker run --rm -v "$PWD":/app -w /app node:22-alpine node --test
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Check out code

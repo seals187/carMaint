@@ -1,6 +1,6 @@
 'use strict';
 
-// Run: node --test   (e.g. docker run --rm -v "$PWD":/app -w /app node:22-alpine node --test)
+// Run: scripts/check.sh
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const core = require('../pb_public/core.js');
