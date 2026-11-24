@@ -3,7 +3,7 @@
 // UI translations. {name} placeholders are filled in by t()/tn();
 // plural texts are written as "singular|plural".
 
-const LANGUAGES = { de: 'Deutsch', en: 'English', es: 'Español', fr: 'Français' };
+const { LANGUAGES } = CarMaint; // core.js
 const LANG_KEY = 'carmaint:lang';
 
 const I18N = {

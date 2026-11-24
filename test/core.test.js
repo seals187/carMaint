@@ -156,3 +156,31 @@ test('dueFrom: next due values from an interval', () => {
 test('docReminderDate: 30 days before expiry', () => {
   assert.equal(core.docReminderDate('2026-12-31'), '2026-12-01');
 });
+
+/* ---------- Settings ---------- */
+
+test('userSettings: defaults and invalid values', () => {
+  const s = core.userSettings({ currency: 'GBP', infoBox: 'x', language: 'it', templates: 'no' }, { currency: 'CHF', language: 'fr' });
+  assert.equal(s.currency, 'CHF');
+  assert.equal(s.infoBox, 'remember');
+  assert.equal(s.language, 'fr');
+  assert.deepEqual(s.templates, []);
+  assert.equal(core.userSettings(null).currency, 'EUR');
+  assert.equal(core.userSettings({ language: 'es' }, { language: 'en' }).language, 'es');
+  assert.equal(core.userSettings({}, { language: 'xx' }).language, 'en');
+});
+
+test('notifyOptions: defaults, allowed values, stages in ascending order', () => {
+  assert.deepEqual(core.notifyOptions(undefined, 6), {
+    enabled: false, email: '', hour: 6, before: [0, 1, 7], frequency: 'new', overdue: '7', push: { enabled: false, url: '' },
+  });
+  const n = core.notifyOptions({ enabled: true, email: ' a@b.ch ', hour: 25, before: [30, 5, 1, 1], frequency: 'hourly', overdue: 3, push: { enabled: true, url: ' ntfy://x/y ' } }, 7);
+  assert.equal(n.email, 'a@b.ch');
+  assert.equal(n.hour, 7);
+  assert.deepEqual(n.before, [1, 30]);
+  assert.equal(n.frequency, 'new');
+  assert.equal(n.overdue, '3');
+  assert.deepEqual(n.push, { enabled: true, url: 'ntfy://x/y' });
+  assert.equal(core.isEmail('a@b.ch'), true);
+  assert.equal(core.isEmail('a@b'), false);
+});

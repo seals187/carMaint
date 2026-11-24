@@ -14,7 +14,6 @@
 // pb_public/core.js, the same rules the website uses.
 
 const core = require(`${__hooks}/../pb_public/core.js`);
-const BEFORE_OPTIONS = [30, 14, 7, 1, 0];
 
 const TEXTS = {
   de: {
@@ -51,25 +50,21 @@ const fill = (text, params) => text.replace(/\{(\w+)\}/g, (_, k) => (params[k] ?
 const plural = (text, n) => text.split('|')[n === 1 ? 0 : 1] ?? text;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const parse = (raw) => { try { return JSON.parse(raw || '{}') || {}; } catch { return {}; } };
-const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '');
+const { isEmail } = core;
 
 // Dates in the server time zone (TZ) as day numbers
 const pad = (n) => String(n).padStart(2, '0');
 const localIso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const { dayNumber, isoOfDay } = core;
 
-// Notification options of a user with defaults; invalid values are replaced
+// Notification options of a user (core.notifyOptions) with the targets to send to:
+// email / push are empty when switched off or not valid
 function options(cfg, raw) {
-  const n = raw && typeof raw === 'object' ? raw : {};
-  const hour = Number.isInteger(n.hour) && n.hour >= 0 && n.hour <= 23 ? n.hour : cfg.notifyHour;
-  const before = Array.isArray(n.before) ? n.before.filter((d) => BEFORE_OPTIONS.includes(d)) : [7, 1, 0];
+  const n = core.notifyOptions(raw, cfg.notifyHour);
   return {
-    email: n.enabled && isEmail(n.email) ? String(n.email).trim() : '',
-    push: n.push?.enabled && n.push.url ? String(n.push.url).trim() : '',
-    hour,
-    before: [...new Set(before)].sort((a, b) => a - b),
-    frequency: ['new', 'daily', 'weekly'].includes(n.frequency) ? n.frequency : 'new',
-    overdue: ['never', '3', '7'].includes(String(n.overdue)) ? String(n.overdue) : '7',
+    ...n,
+    email: n.enabled && isEmail(n.email) ? n.email : '',
+    push: n.push.enabled && n.push.url ? n.push.url : '',
   };
 }
 
@@ -144,7 +139,7 @@ function layout(cfg, body) {
 }
 
 function message(cfg, user, settings, items) {
-  const lang = TEXTS[settings.language] ? settings.language : 'en';
+  const lang = settings.language;
   const T = TEXTS[lang];
   const f = format(lang, settings.currency);
   const due = (i) => [i.dueDate && fill(T.dueOn, { date: f.date(i.dueDate) }), i.dueKm && fill(T.dueAt, { km: f.km(i.dueKm) })].filter(Boolean).join(' · ');
@@ -211,13 +206,13 @@ function run(app, cfg, force = false) {
   const today = dayNumber(localIso(now));
   let sent = 0;
   for (const user of app.findAllRecords('users')) {
-    const settings = parse(user.getString('settings'));
+    const settings = settingsOf(user);
     const opts = options(cfg, settings.notify);
     const email = cfg.mailEnabled ? opts.email : '';
     if ((!email && !opts.push) || demoBlocked(cfg, user)) continue;
     if (!force && (now.getHours() !== opts.hour || (opts.frequency === 'weekly' && now.getDay() !== 1))) continue;
     try {
-      const lang = TEXTS[settings.language] ? settings.language : 'en';
+      const lang = settings.language;
       const items = dueItems(app, user, opts, lang, today);
       if (!items.length) continue;
       const msg = message(cfg, user, settings, items);
@@ -243,7 +238,7 @@ function preview(app, cfg, user, settings, rawOptions) {
   let day = dayNumber(localIso(now));
   if (now.getHours() >= opts.hour) day++;
   if (opts.frequency === 'weekly') while (new Date(day * 864e5).getUTCDay() !== 1) day++;
-  const lang = TEXTS[settings.language] ? settings.language : 'en';
+  const lang = settings.language;
   const T = TEXTS[lang];
   const f = format(lang, settings.currency);
   const items = dueItems(app, user, opts, lang, day).map((i) => ({ title: i.title, car: carName(i.car), label: itemLabel(i, T, f).text }));
@@ -251,7 +246,7 @@ function preview(app, cfg, user, settings, rawOptions) {
 }
 
 function test(app, cfg, user, settings, email, push) {
-  const lang = TEXTS[settings.language] ? settings.language : 'en';
+  const lang = settings.language;
   const T = TEXTS[lang];
   const hour = String(options(cfg, settings.notify).hour).padStart(2, '0');
   const body = fill(T.testBody, { hour });
@@ -263,6 +258,7 @@ function test(app, cfg, user, settings, email, push) {
   if (push) sendPush(cfg, push, subject, body);
 }
 
-const settingsOf = (user) => parse(user.getString('settings'));
+// Settings of a user with defaults (core.js); the language is always one of TEXTS
+const settingsOf = (user) => core.userSettings(parse(user.getString('settings')), { language: 'en' });
 
 module.exports = { run, preview, test, isEmail, demoBlocked, settingsOf };

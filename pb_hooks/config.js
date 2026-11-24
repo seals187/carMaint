@@ -8,9 +8,11 @@ const env = (key, fallback = '') => {
   return value === '' ? fallback : value;
 };
 
-const CURRENCIES = ['EUR', 'CHF', 'USD'];
+// Supported currencies and languages are defined once in pb_public/core.js
+const core = require(`${__hooks}/../pb_public/core.js`);
+const CURRENCIES = Object.keys(core.CURRENCIES);
 const currency = env('DEFAULT_CURRENCY', 'EUR').toUpperCase();
-const LANGUAGES = ['de', 'en', 'es', 'fr'];
+const LANGUAGES = Object.keys(core.LANGUAGES);
 const language = env('DEFAULT_LANGUAGE', 'en').toLowerCase();
 const int = (key, fallback) => {
   const n = parseInt(env(key, String(fallback)), 10);

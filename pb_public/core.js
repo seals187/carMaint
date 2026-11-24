@@ -26,6 +26,53 @@
     return target.toISOString().slice(0, 10);
   }
 
+  /* ---------- Settings ---------- */
+
+  const LANGUAGES = { de: 'Deutsch', en: 'English', es: 'Español', fr: 'Français' };
+  // Currencies with the locale of their number format
+  const CURRENCIES = { EUR: { locale: 'de-DE' }, CHF: { locale: 'de-CH' }, USD: { locale: 'en-US' } };
+  // Vehicle data box and "due soon": always open, always closed or as last left
+  const BOX_MODES = ['open', 'closed', 'remember'];
+  const DEFAULT_SETTINGS = { currency: 'EUR', infoBox: 'remember', infoCollapsed: false, dueBox: 'remember', dueCollapsed: false, language: 'de', templates: [] };
+
+  const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '');
+
+  // Settings of a user (users.settings) with defaults; invalid values are replaced.
+  // defaults: the currency and language to use when none (or an unknown one) is stored.
+  function userSettings(raw, { currency = DEFAULT_SETTINGS.currency, language = DEFAULT_SETTINGS.language } = {}) {
+    const s = { ...DEFAULT_SETTINGS, currency, language, ...(raw && typeof raw === 'object' ? raw : {}) };
+    if (!CURRENCIES[s.currency]) s.currency = CURRENCIES[currency] ? currency : DEFAULT_SETTINGS.currency;
+    if (!BOX_MODES.includes(s.infoBox)) s.infoBox = DEFAULT_SETTINGS.infoBox;
+    if (!BOX_MODES.includes(s.dueBox)) s.dueBox = DEFAULT_SETTINGS.dueBox;
+    if (!LANGUAGES[s.language]) s.language = LANGUAGES[language] ? language : 'en';
+    if (!Array.isArray(s.templates)) s.templates = [];
+    return s;
+  }
+
+  // Reminder notifications (settings.notify), sent by pb_hooks/notify.js:
+  //   before    – days before the due date (0 = on the day)
+  //   frequency – only new stages, daily or weekly (Mondays)
+  //   overdue   – repeat overdue reminders never or every 3 / 7 days
+  const NOTIFY_BEFORE = [30, 14, 7, 1, 0];
+  const NOTIFY_FREQUENCIES = ['new', 'daily', 'weekly'];
+  const NOTIFY_REPEATS = ['never', '3', '7'];
+
+  // Notification options with defaults; invalid values are replaced
+  function notifyOptions(raw, defaultHour = 7) {
+    const n = raw && typeof raw === 'object' ? raw : {};
+    const before = Array.isArray(n.before) ? n.before.filter((d) => NOTIFY_BEFORE.includes(d)) : [7, 1, 0];
+    const push = n.push && typeof n.push === 'object' ? n.push : {};
+    return {
+      enabled: !!n.enabled,
+      email: String(n.email ?? '').trim(),
+      hour: Number.isInteger(n.hour) && n.hour >= 0 && n.hour <= 23 ? n.hour : defaultHour,
+      before: [...new Set(before)].sort((a, b) => a - b), // ascending: the first match is the closest stage
+      frequency: NOTIFY_FREQUENCIES.includes(n.frequency) ? n.frequency : 'new',
+      overdue: NOTIFY_REPEATS.includes(String(n.overdue)) ? String(n.overdue) : '7',
+      push: { enabled: !!push.enabled, url: String(push.url ?? '').trim() },
+    };
+  }
+
   /* ---------- Reminder status ---------- */
 
   // Levels: overdue (red), soon (yellow), upcoming (still listed on the home page), later
@@ -216,6 +263,7 @@
     isIsoDate, dayNumber, isoOfDay, daysBetween, addDays, addMonths,
     SOON_KM, SOON_DAYS, UPCOMING_KM, UPCOMING_DAYS, KM_PER_DAY_DEFAULT,
     kmPerDay, inspectionReminder, reminderStatus, weekColumn, MFK_INTERVAL_MONTHS, intervalOf, dueFrom, DOC_REMIND_DAYS, docReminderDate,
+    LANGUAGES, CURRENCIES, BOX_MODES, DEFAULT_SETTINGS, isEmail, userSettings, NOTIFY_BEFORE, NOTIFY_FREQUENCIES, NOTIFY_REPEATS, notifyOptions,
     COST_TYPES, costType, sumCosts, costsByType, monthTotals, kmDriven, runningCostPerKm, yearFigures, allYearsFigures,
   };
 });

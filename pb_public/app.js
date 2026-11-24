@@ -4,6 +4,7 @@
 // Domain rules shared with the server come from core.js (CarMaint).
 const { daysBetween, UPCOMING_DAYS, kmPerDay, inspectionReminder, reminderStatus, weekColumn,
   intervalOf, dueFrom, DOC_REMIND_DAYS, docReminderDate,
+  CURRENCIES, BOX_MODES: INFO_MODES, DEFAULT_SETTINGS, isEmail, userSettings, NOTIFY_BEFORE, NOTIFY_FREQUENCIES, NOTIFY_REPEATS, notifyOptions: notifyOptionsOf,
   COST_TYPES, sumCosts: sum, costsByType: byType, monthTotals, kmDriven, runningCostPerKm, yearFigures, allYearsFigures } = CarMaint;
 
 const THEME_KEY = 'carmaint:theme';
@@ -12,15 +13,6 @@ const CAR_PHOTO_MAX = 1600;               // px, longest side
 const ATTACHMENT_MAX = 2000;              // receipts slightly larger so text stays readable
 const GITHUB_URL = 'https://github.com/seals187/carmaint';
 const COPYRIGHT_SINCE = 2026;
-
-const CURRENCIES = {
-  EUR: { locale: 'de-DE' },
-  CHF: { locale: 'de-CH' },
-  USD: { locale: 'en-US' },
-};
-
-const INFO_MODES = ['open', 'closed', 'remember'];
-const DEFAULT_SETTINGS = { currency: 'EUR', infoBox: 'remember', infoCollapsed: false, dueBox: 'remember', dueCollapsed: false, language: 'de', templates: [] };
 
 const TYPES = {
   service:    { color: 'blue', icon: 'wrench' },
@@ -558,12 +550,7 @@ function setLanguage(next) {
 }
 
 function applyUserSettings() {
-  const s = { ...DEFAULT_SETTINGS, currency: serverConfig.defaultCurrency, language: lang, ...(me()?.settings ?? {}) };
-  if (!CURRENCIES[s.currency]) s.currency = DEFAULT_SETTINGS.currency;
-  if (!INFO_MODES.includes(s.infoBox)) s.infoBox = DEFAULT_SETTINGS.infoBox;
-  if (!INFO_MODES.includes(s.dueBox)) s.dueBox = DEFAULT_SETTINGS.dueBox;
-  if (!LANGUAGES[s.language]) s.language = lang;
-  if (!Array.isArray(s.templates)) s.templates = [];
+  const s = userSettings(me()?.settings, { currency: serverConfig.defaultCurrency, language: lang });
   settings = s;
   setCurrency(s.currency);
   setLanguage(s.language);
@@ -879,22 +866,9 @@ const SETTINGS_SECTIONS = [
   { key: 'account', icon: 'user' },
   { key: 'admin', icon: 'settings', admin: true },
 ];
-const NOTIFY_BEFORE = [30, 14, 7, 1, 0];
-const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
-// Notification options of the user with defaults (see pb_hooks/notify.js)
-function notifyOptions() {
-  const n = settings.notify ?? {};
-  return {
-    enabled: !!n.enabled,
-    email: n.email ?? '',
-    hour: Number.isInteger(n.hour) ? n.hour : serverConfig.notify?.hour ?? 7,
-    before: Array.isArray(n.before) ? n.before : [7, 1, 0],
-    frequency: n.frequency ?? 'new',
-    overdue: String(n.overdue ?? '7'),
-    push: { enabled: !!n.push?.enabled, url: n.push?.url ?? '' },
-  };
-}
+// Notification options of the user with defaults (core.js; sent by pb_hooks/notify.js)
+const notifyOptions = () => notifyOptionsOf(settings.notify, serverConfig.notify?.hour ?? 7);
 
 function notifyFromForm(form) {
   const f = new FormData(form);
@@ -950,9 +924,9 @@ function notifySection() {
       ${settingRow(t('notify.hour'), t('notify.timeZone', { zone: esc(serverConfig.notify?.timeZone ?? '') }), `<select class="text-input" name="hour" aria-label="${t('notify.hour')}">${hours}</select>`)}
       ${settingRow(t('notify.before'), t('notify.beforeHint'), `<div class="check-chips">${before}</div>`)}
       ${settingRow(t('notify.frequency'), '', segmented('frequency', t('notify.frequency'),
-        { new: t('notify.freq.new'), daily: t('notify.freq.daily'), weekly: t('notify.freq.weekly') }, n.frequency))}
+        NOTIFY_FREQUENCIES.map((k) => [k, t(`notify.freq.${k}`)]), n.frequency))}
       ${settingRow(t('notify.overdue'), '', segmented('overdue', t('notify.overdue'),
-        [['never', t('notify.repeat.never')], ['3', t('notify.repeat.3')], ['7', t('notify.repeat.7')]], n.overdue))}
+        NOTIFY_REPEATS.map((k) => [k, t(`notify.repeat.${k}`)]), n.overdue))}
       ${settingRow(t('notify.push'), serverConfig.notify?.apprise ? t('notify.pushHintApprise') : t('notify.pushHint'), `
         <div class="setting-inline">
           <input class="text-input" name="pushUrl" value="${esc(n.push.url)}" placeholder="ntfy://ntfy.sh/${t('ph.topic')}" aria-label="${t('notify.pushUrl')}" autocomplete="off" spellcheck="false">
