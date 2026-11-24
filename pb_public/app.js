@@ -325,23 +325,34 @@ function hydrate() {
   }
 }
 
-const carFile = (car, name) => `cars/${car.id}/${name}`;
-const entryFile = (entry, name) => `entries/${entry.id}/${name}`;
-const attachmentLabel = (entry, name) => entry?.attachmentNames?.[name] || displayName(name);
+/* ---------- Attachments ---------- */
 
-const docFile = (doc, name) => `documents/${doc.id}/${name}`;
+// Path of a file of any record (car photo, receipt of an entry, file of a document)
+const recordFile = (record, name) => `${record.collectionName}/${record.id}/${name}`;
+// Original name of an attachment (the server sanitizes file names)
+const attachmentLabel = (record, name) => record?.attachmentNames?.[name] || displayName(name);
 
-// Uploads attachments (of an entry or document) and remembers their original
-// names (the server sanitizes file names).
-async function uploadAttachments(entry, files, collection = 'entries') {
-  const before = new Set(entry.attachments);
-  const updated = await store.upload(collection, entry.id, 'attachments', files);
+// Uploads attachments of an entry or document and remembers their original names.
+// New server names are matched to the files in upload order.
+async function uploadAttachments(record, files) {
+  const list = record.collectionName;
+  const before = new Set(record.attachments);
+  const updated = await store.upload(list, record.id, 'attachments', files);
   const names = {};
   for (const name of updated.attachments) {
-    if (entry.attachmentNames?.[name]) names[name] = entry.attachmentNames[name];
+    if (record.attachmentNames?.[name]) names[name] = record.attachmentNames[name];
   }
   updated.attachments.filter((name) => !before.has(name)).forEach((name, i) => { names[name] = files[i]?.name ?? name; });
-  return store.save(collection, { attachmentNames: names }, entry.id);
+  return store.save(list, { attachmentNames: names }, record.id);
+}
+
+// Record fields that remove attachments (and their original names)
+function attachmentRemovals(record, removed) {
+  if (!removed.length) return {};
+  return {
+    'attachments-': removed,
+    attachmentNames: Object.fromEntries(Object.entries(record.attachmentNames ?? {}).filter(([name]) => !removed.includes(name))),
+  };
 }
 
 const MIME_EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif', 'image/bmp': '.bmp', 'image/avif': '.avif', 'application/pdf': '.pdf' };
@@ -424,36 +435,36 @@ const fileMeta = (record, name) => record?.fileInfo?.[name] ?? {};
 const previewsOf = (record, name) => (fileMeta(record, name).previews ?? []).filter((p) => record.previews?.includes(p));
 
 // An attachment for the viewer: images as one page, PDFs with their preview pages
-function viewerItem(record, pathOf, name) {
+function viewerItem(record, name) {
   const image = isImageName(name);
   const pages = image ? [name] : previewsOf(record, name);
   if (!pages.length) return null;
   return {
-    name: attachmentLabel(record, name), file: pathOf(record, name), pdf: !image,
-    pages: pages.map((p) => pathOf(record, p)), total: image ? 1 : fileMeta(record, name).pages || pages.length,
+    name: attachmentLabel(record, name), file: recordFile(record, name), pdf: !image,
+    pages: pages.map((p) => recordFile(record, p)), total: image ? 1 : fileMeta(record, name).pages || pages.length,
   };
 }
 
 // Shows a file of an entry or document in the viewer, together with the other
 // files that have a preview; PDFs without a preview open in a new tab.
 // Without a name: the first file.
-async function viewFiles(record, pathOf, name = null) {
-  const names = record?.attachments.filter((n) => viewerItem(record, pathOf, n)) ?? [];
+async function viewFiles(record, name = null) {
+  const names = record?.attachments.filter((n) => viewerItem(record, n)) ?? [];
   const target = name ?? names[0] ?? record?.attachments[0];
   if (!target) return;
   if (names.includes(target)) {
-    openLightbox(names.map((n) => viewerItem(record, pathOf, n)), names.indexOf(target));
+    openLightbox(names.map((n) => viewerItem(record, n)), names.indexOf(target));
   } else {
-    openFile(await fileObjectUrl(pathOf(record, target)), attachmentLabel(record, target));
+    openFile(await fileObjectUrl(recordFile(record, target)), attachmentLabel(record, target));
   }
 }
 
 // Cover of a record: the first image, otherwise the first page of the first PDF
-function coverOf(record, pathOf) {
+function coverOf(record) {
   const image = record.attachments.find(isImageName);
-  if (image) return { path: pathOf(record, image), thumb: '300x225' };
+  if (image) return { path: recordFile(record, image), thumb: '300x225' };
   const preview = record.attachments.map((n) => previewsOf(record, n)[0]).find(Boolean);
-  return preview ? { path: pathOf(record, preview), thumb: '300x225t' } : null;
+  return preview ? { path: recordFile(record, preview), thumb: '300x225t' } : null;
 }
 const entriesFor = (carId) => db.entries
   .filter((e) => e.car === carId)
@@ -508,9 +519,9 @@ async function moveLegacyDocuments() {
     try {
       doc = await store.save('documents', { car: entry.car, kind: guessDocKind(entry.title), title: entry.title });
       const files = await Promise.all(entry.attachments.map(async (name) => ({
-        blob: await fetchFile(entryFile(entry, name)), name: attachmentLabel(entry, name),
+        blob: await fetchFile(recordFile(entry, name)), name: attachmentLabel(entry, name),
       })));
-      if (files.length) doc = await uploadAttachments(doc, files, 'documents');
+      if (files.length) doc = await uploadAttachments(doc, files);
       await store.remove('entries', entry.id);
     } catch (err) {
       console.warn('Document entry could not be moved', err);
@@ -851,7 +862,7 @@ function carTimeline(states) {
 
 // Cars without a photo get a colour gradient instead.
 const carMedia = (car, thumb) => (car.photos[0]
-  ? `<img data-file="${esc(carFile(car, car.photos[0]))}" data-thumb="${thumb}" alt="">`
+  ? `<img data-file="${esc(recordFile(car, car.photos[0]))}" data-thumb="${thumb}" alt="">`
   : `<span class="car-tint" style="--hue:${carHue(car)}"></span>`);
 
 // The demo user (DEMO_USERNAME) can have single settings disabled (DEMO_DISABLED).
@@ -1366,7 +1377,7 @@ function renderCar(car) {
     <div class="car-layout">
       <aside class="card car-side">
         <div class="car-side-media">${photos[0]
-          ? `<button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="0" aria-label="${t('photos.view', { n: 1 })}"><img data-file="${esc(carFile(car, photos[0]))}" data-thumb="640x360" alt=""></button>`
+          ? `<button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="0" aria-label="${t('photos.view', { n: 1 })}"><img data-file="${esc(recordFile(car, photos[0]))}" data-thumb="640x360" alt=""></button>`
           : carMedia(car)}</div>
         <div class="car-side-body">
           <div>
@@ -1425,7 +1436,7 @@ function photoSection(car) {
       <div class="photo-grid">
         ${photos.map((name, i) => `
           <div class="thumb">
-            <button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="${i}" aria-label="${t('photos.view', { n: i + 1 })}"><img data-file="${esc(carFile(car, name))}" data-thumb="300x225" alt=""></button>
+            <button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="${i}" aria-label="${t('photos.view', { n: i + 1 })}"><img data-file="${esc(recordFile(car, name))}" data-thumb="300x225" alt=""></button>
             <div class="thumb-actions">
               ${i > 0 ? `<button class="icon-btn sm" data-action="cover-photo" data-id="${id}" data-photo="${esc(name)}" title="${t('photos.makeCover')}" aria-label="${t('photos.makeCover')}">${icon('star')}</button>` : ''}
               <button class="icon-btn sm" data-action="delete-photo" data-id="${id}" data-photo="${esc(name)}" title="${t('photos.delete')}" aria-label="${t('photos.delete')}">${icon('trash')}</button>
@@ -1494,7 +1505,7 @@ function renderCarPhone(car) {
 
     <div class="car-phone-head" data-size="${size}">
       <div class="car-phone-photo">${photos[0]
-        ? `<button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="0" aria-label="${t('photos.view', { n: 1 })}"><img data-file="${esc(carFile(car, photos[0]))}" data-thumb="${PHONE_PHOTO_THUMBS[size]}" alt=""></button>`
+        ? `<button class="thumb-img" data-action="view-photo" data-id="${id}" data-index="0" aria-label="${t('photos.view', { n: 1 })}"><img data-file="${esc(recordFile(car, photos[0]))}" data-thumb="${PHONE_PHOTO_THUMBS[size]}" alt=""></button>`
         : carMedia(car)}</div>
       <div class="car-phone-name">
         <h1>${carTitle(car)}</h1>
@@ -1949,7 +1960,7 @@ function docList(car) {
   const docs = documentsFor(car.id);
   if (!docs.length) return `<p class="muted small">${t('docs.emptyText')}</p>`;
   return `<ul class="doc-list">${docs.map((doc) => {
-    const cover = coverOf(doc, docFile);
+    const cover = coverOf(doc);
     const files = doc.attachments.length;
     return `
       <li>
@@ -2155,41 +2166,104 @@ carForm.addEventListener('submit', (ev) => {
   });
 });
 
-// Attachments in the entry dialog: keep/remove existing ones, queue new ones.
-let draft = { entry: null, keep: [], add: [] };
+// Files of an entry or document in its dialog: existing ones can be removed, new ones are
+// queued (file picker, drag & drop, pasting) and uploaded when the record is saved.
+//   open(record)      – start with the files of a record (null for a new one)
+//   save(saveRecord)  – saveRecord(fields) stores the record (fields remove files), then
+//                       the queued files are uploaded; returns the saved record
+//   reset()           – forget the queued files and start empty
+function attachmentEditor({ list: el, input, drop, dialog }) {
+  let record = null;
+  let keep = [];
+  let add = [];
 
-// Also used for the files of a document (d = docDraft).
-function renderDraft(d = draft, el = $('#attEditor'), pathOf = entryFile) {
-  const item = (media, name, list, i) => `
-    <div class="draft-item">${media}<span>${esc(name)}</span>
-      <button type="button" class="icon-btn sm" data-remove="${list}" data-index="${i}" aria-label="${t('att.remove', { name: esc(name) })}">${icon('x')}</button>
-    </div>`;
-  el.innerHTML = [
-    ...d.keep.map((name, i) => item(
-      isImageName(name) ? `<img data-file="${esc(pathOf(d.entry, name))}" data-thumb="128x128" alt="">` : icon('file'),
-      attachmentLabel(d.entry, name), 'keep', i)),
-    ...d.add.map((a, i) => item(a.url ? `<img src="${a.url}" alt="">` : icon('file'), a.file.name, 'add', i)),
-  ].join('');
-  hydrate();
-}
+  const clear = () => {
+    add.forEach((a) => a.url && URL.revokeObjectURL(a.url));
+    record = null;
+    keep = [];
+    add = [];
+  };
 
-// Queues files of an allowed type for uploading.
-function queueFiles(d, files) {
-  for (const file of files) {
-    try {
-      checkFileType(file, serverConfig.fileTypes.attachments);
-    } catch (err) {
-      toast(err.message);
-      continue;
-    }
-    d.add.push({ file, url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null });
+  function render() {
+    const item = (media, name, from, i) => `
+      <div class="draft-item">${media}<span>${esc(name)}</span>
+        <button type="button" class="icon-btn sm" data-remove="${from}" data-index="${i}" aria-label="${t('att.remove', { name: esc(name) })}">${icon('x')}</button>
+      </div>`;
+    el.innerHTML = [
+      ...keep.map((name, i) => item(
+        isImageName(name) ? `<img data-file="${esc(recordFile(record, name))}" data-thumb="128x128" alt="">` : icon('file'),
+        attachmentLabel(record, name), 'keep', i)),
+      ...add.map((a, i) => item(a.url ? `<img src="${a.url}" alt="">` : icon('file'), a.file.name, 'add', i)),
+    ].join('');
+    hydrate();
   }
+
+  // Only files of an allowed type are queued.
+  function queue(files) {
+    for (const file of files) {
+      try {
+        checkFileType(file, serverConfig.fileTypes.attachments);
+      } catch (err) {
+        toast(err.message);
+        continue;
+      }
+      add.push({ file, url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null });
+    }
+    render();
+  }
+
+  input.addEventListener('change', () => {
+    queue(input.files);
+    input.value = '';
+  });
+  drop.addEventListener('dragover', (ev) => {
+    ev.preventDefault();
+    drop.classList.add('over');
+  });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (ev) => {
+    ev.preventDefault();
+    drop.classList.remove('over');
+    queue(ev.dataTransfer.files);
+  });
+  dialog.addEventListener('paste', (ev) => {
+    const files = [...(ev.clipboardData?.files ?? [])];
+    if (!files.length) return;
+    ev.preventDefault();
+    queue(files);
+  });
+  el.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('[data-remove]');
+    if (!btn) return;
+    const [removed] = (btn.dataset.remove === 'keep' ? keep : add).splice(Number(btn.dataset.index), 1);
+    if (removed?.url) URL.revokeObjectURL(removed.url);
+    render();
+  });
+  dialog.addEventListener('close', clear);
+
+  return {
+    open(r) {
+      clear();
+      record = r?.id ? r : null;
+      keep = [...(record?.attachments ?? [])];
+      render();
+    },
+    reset() {
+      clear();
+      render();
+    },
+    async save(saveRecord) {
+      const files = await Promise.all(add.map((a) => prepareFile(a.file, ATTACHMENT_MAX, serverConfig.fileTypes.attachments)));
+      const removed = (record?.attachments ?? []).filter((name) => !keep.includes(name));
+      const saved = await saveRecord(record ? attachmentRemovals(record, removed) : {});
+      return files.length ? uploadAttachments(saved, files) : saved;
+    },
+  };
 }
 
-function clearDraft() {
-  draft.add.forEach((d) => d.url && URL.revokeObjectURL(d.url));
-  draft = { entry: null, keep: [], add: [], reminder: null };
-}
+const entryFiles = attachmentEditor({ list: $('#attEditor'), input: $('#attInput'), drop: $('#dropzone'), dialog: entryDialog });
+// Reminder state(s) the open entry dialog completes ("Done" on a due card)
+let completing = null;
 
 // reminder: the reminder state this entry completes ("Done" on a due card)
 function openEntryDialog(entry, reminder = null) {
@@ -2205,11 +2279,8 @@ function openEntryDialog(entry, reminder = null) {
   f.namedItem('cost').value = entry.cost || '';
   for (const key of ['title', 'shop', 'notes']) f.namedItem(key).value = entry[key] ?? '';
   $('#currencySymbol').textContent = currencySymbol();
-  clearDraft();
-  draft.entry = isNew ? null : entry;
-  draft.keep = [...(entry.attachments ?? [])];
-  draft.reminder = reminder;
-  renderDraft();
+  entryFiles.open(entry);
+  completing = reminder;
   // Templates and the reminder for the next time only when adding an entry.
   // Several completed reminders each keep their own interval (no reminder box).
   const several = Array.isArray(reminder);
@@ -2331,45 +2402,6 @@ $('#todayBtn').addEventListener('click', () => {
   updateEntryHints();
 });
 
-function addDraftFiles(files) {
-  queueFiles(draft, files);
-  renderDraft();
-}
-
-$('#attInput').addEventListener('change', (ev) => {
-  addDraftFiles(ev.target.files);
-  ev.target.value = '';
-});
-
-// Drag & drop and pasting (Ctrl+V) files into the entry dialog
-const dropzone = $('#dropzone');
-dropzone.addEventListener('dragover', (ev) => {
-  ev.preventDefault();
-  dropzone.classList.add('over');
-});
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('over'));
-dropzone.addEventListener('drop', (ev) => {
-  ev.preventDefault();
-  dropzone.classList.remove('over');
-  addDraftFiles(ev.dataTransfer.files);
-});
-entryDialog.addEventListener('paste', (ev) => {
-  const files = [...(ev.clipboardData?.files ?? [])];
-  if (!files.length) return;
-  ev.preventDefault();
-  addDraftFiles(files);
-});
-
-$('#attEditor').addEventListener('click', (ev) => {
-  const btn = ev.target.closest('[data-remove]');
-  if (!btn) return;
-  const [removed] = draft[btn.dataset.remove].splice(Number(btn.dataset.index), 1);
-  if (removed?.url) URL.revokeObjectURL(removed.url);
-  renderDraft();
-});
-
-entryDialog.addEventListener('close', clearDraft);
-
 async function bumpMileage(car, mileage) {
   if (mileage && mileage > (car.mileage || 0)) {
     await store.save('cars', { mileage }, car.id);
@@ -2429,8 +2461,8 @@ async function syncDocReminder(doc, remind) {
 function resetForNext() {
   const f = entryForm.elements;
   for (const key of ['title', 'cost', 'notes']) f.namedItem(key).value = '';
-  clearDraft();
-  renderDraft();
+  entryFiles.reset();
+  completing = null;
   renderTemplates();
   setRemind(null);
   f.namedItem('title').focus();
@@ -2442,8 +2474,6 @@ entryForm.addEventListener('submit', (ev) => {
   withBusy(entryForm, async () => {
     const f = Object.fromEntries(new FormData(entryForm));
     const existing = entryById(f.id);
-    const files = await Promise.all(draft.add.map((d) => prepareFile(d.file, ATTACHMENT_MAX, serverConfig.fileTypes.attachments)));
-    const removed = (existing?.attachments ?? []).filter((name) => !draft.keep.includes(name));
     const data = {
       type: f.type,
       date: f.date,
@@ -2453,19 +2483,14 @@ entryForm.addEventListener('submit', (ev) => {
       shop: f.shop.trim(),
       notes: f.notes.trim(),
     };
-    if (removed.length) {
-      data['attachments-'] = removed;
-      data.attachmentNames = Object.fromEntries(Object.entries(existing.attachmentNames ?? {}).filter(([name]) => !removed.includes(name)));
-    }
-
-    let entry = await store.save('entries', existing ? data : { ...data, car: f.car }, existing?.id);
-    if (files.length) entry = await uploadAttachments(entry, files);
+    const entry = await entryFiles.save((fields) =>
+      store.save('entries', existing ? { ...data, ...fields } : { ...data, car: f.car }, existing?.id));
 
     await bumpMileage(carById(f.car), data.mileage);
     // Completed reminders, or the reminder for the next time (only for new entries)
-    if (Array.isArray(draft.reminder) || !existing) {
+    if (Array.isArray(completing) || !existing) {
       const next = f.remind ? { km: num(f.remindKm), months: num(f.remindMonths) } : null;
-      await remindAfterEntry(f.car, entry, draft.reminder, next);
+      await remindAfterEntry(f.car, entry, completing, next);
     }
 
     if (another) resetForNext();
@@ -2605,14 +2630,13 @@ function completeReminder(state) {
 
 /* ---------- Documents dialog ---------- */
 
-let docDraft = { entry: null, keep: [], add: [] };
+const docFiles = attachmentEditor({ list: $('#docFiles'), input: $('#docInput'), drop: $('#docDrop'), dialog: docDialog });
 const docLabel = (kind) => t(`doc.kind.${kind}`);
 
 function openDocDialog(carId, doc = null) {
   const f = docForm.elements;
   docForm.reset();
-  docDraft.add.forEach((a) => a.url && URL.revokeObjectURL(a.url));
-  docDraft = { entry: doc, keep: [...(doc?.attachments ?? [])], add: [] };
+  docFiles.open(doc);
   f.namedItem('id').value = doc?.id ?? '';
   f.namedItem('car').value = carId;
   $('#docKinds').innerHTML = DOC_KINDS.map((kind) => `
@@ -2623,7 +2647,6 @@ function openDocDialog(carId, doc = null) {
   f.namedItem('remind').checked = doc ? !!doc.reminder : true;
   $('#docDialogTitle').textContent = doc ? t('doc.edit') : t('docs.add');
   $('#docDelete').hidden = !doc;
-  renderDraft(docDraft, $('#docFiles'), docFile);
   updateDocRemind();
   showDialog(docDialog);
 }
@@ -2645,54 +2668,14 @@ docForm.addEventListener('change', (ev) => {
 });
 docForm.addEventListener('input', updateDocRemind);
 
-$('#docInput').addEventListener('change', (ev) => {
-  queueFiles(docDraft, ev.target.files);
-  ev.target.value = '';
-  renderDraft(docDraft, $('#docFiles'), docFile);
-});
-
-$('#docFiles').addEventListener('click', (ev) => {
-  const btn = ev.target.closest('[data-remove]');
-  if (!btn) return;
-  const [removed] = docDraft[btn.dataset.remove].splice(Number(btn.dataset.index), 1);
-  if (removed?.url) URL.revokeObjectURL(removed.url);
-  renderDraft(docDraft, $('#docFiles'), docFile);
-});
-
-const docDrop = $('#docDrop');
-docDrop.addEventListener('dragover', (ev) => {
-  ev.preventDefault();
-  docDrop.classList.add('over');
-});
-docDrop.addEventListener('dragleave', () => docDrop.classList.remove('over'));
-docDrop.addEventListener('drop', (ev) => {
-  ev.preventDefault();
-  docDrop.classList.remove('over');
-  queueFiles(docDraft, ev.dataTransfer.files);
-  renderDraft(docDraft, $('#docFiles'), docFile);
-});
-docDialog.addEventListener('paste', (ev) => {
-  const files = [...(ev.clipboardData?.files ?? [])];
-  if (!files.length) return;
-  ev.preventDefault();
-  queueFiles(docDraft, files);
-  renderDraft(docDraft, $('#docFiles'), docFile);
-});
-
 docForm.addEventListener('submit', (ev) => {
   ev.preventDefault();
   withBusy(docForm, async () => {
     const f = Object.fromEntries(new FormData(docForm));
     const existing = documentById(f.id);
-    const files = await Promise.all(docDraft.add.map((a) => prepareFile(a.file, ATTACHMENT_MAX, serverConfig.fileTypes.attachments)));
-    const removed = (existing?.attachments ?? []).filter((name) => !docDraft.keep.includes(name));
     const data = { kind: f.kind, title: f.title.trim(), validUntil: f.validUntil };
-    if (removed.length) {
-      data['attachments-'] = removed;
-      data.attachmentNames = Object.fromEntries(Object.entries(existing.attachmentNames ?? {}).filter(([name]) => !removed.includes(name)));
-    }
-    let doc = await store.save('documents', existing ? data : { ...data, car: f.car }, existing?.id);
-    if (files.length) doc = await uploadAttachments(doc, files, 'documents');
+    const doc = await docFiles.save((fields) =>
+      store.save('documents', existing ? { ...data, ...fields } : { ...data, car: f.car }, existing?.id));
     await syncDocReminder(doc, !!f.remind);
     docDialog.close();
     route();
@@ -3119,7 +3102,7 @@ document.addEventListener('click', (ev) => {
       break;
     case 'view-photo': {
       const car = carById(id);
-      openLightbox(car.photos.map((name) => ({ name: '', file: carFile(car, name), pages: [carFile(car, name)], total: 1 })), Number(el.dataset.index));
+      openLightbox(car.photos.map((name) => ({ name: '', file: recordFile(car, name), pages: [recordFile(car, name)], total: 1 })), Number(el.dataset.index));
       break;
     }
     case 'cover-photo':
@@ -3162,11 +3145,11 @@ document.addEventListener('click', (ev) => {
       break;
     }
     case 'view-document':
-      runAction(() => viewFiles(documentById(id), docFile));
+      runAction(() => viewFiles(documentById(id)));
       break;
     case 'view-file':
       // A file card of an entry: shown in the viewer
-      runAction(() => viewFiles(entryById(id), entryFile, el.dataset.file));
+      runAction(() => viewFiles(entryById(id), el.dataset.file));
       break;
     case 'edit-entry':
       openEntryDialog(entryById(id));
@@ -3320,13 +3303,13 @@ async function exportBackup() {
   const cars = [];
   for (const c of db.cars) {
     const photos = [];
-    for (const name of c.photos) photos.push((await addFile(carFile(c, name), displayName(name))).id);
+    for (const name of c.photos) photos.push((await addFile(recordFile(c, name), displayName(name))).id);
     cars.push({ id: c.id, make: c.make, model: c.model, year: c.year || null, plate: c.plate, mileage: c.mileage || null, info: c.info ?? {}, photos });
   }
   const entries = [];
   for (const e of db.entries) {
     const attachments = [];
-    for (const name of e.attachments) attachments.push(await addFile(entryFile(e, name), attachmentLabel(e, name)));
+    for (const name of e.attachments) attachments.push(await addFile(recordFile(e, name), attachmentLabel(e, name)));
     entries.push({
       id: e.id, carId: e.car, type: e.type, date: e.date, mileage: e.mileage || null, title: e.title,
       cost: e.cost || null, shop: e.shop, notes: e.notes, attachments,
@@ -3336,7 +3319,7 @@ async function exportBackup() {
   const documents = [];
   for (const d of db.documents) {
     const attachments = [];
-    for (const name of d.attachments) attachments.push(await addFile(docFile(d, name), attachmentLabel(d, name)));
+    for (const name of d.attachments) attachments.push(await addFile(recordFile(d, name), attachmentLabel(d, name)));
     documents.push({ carId: d.car, kind: d.kind, title: d.title, validUntil: d.validUntil, remind: !!d.reminder, attachments });
   }
 
@@ -3435,7 +3418,7 @@ async function importBackup(data) {
         validUntil: /^\d{4}-\d{2}-\d{2}$/.test(d.validUntil) ? d.validUntil : '',
       });
       const atts = await filesOf(d.attachments, (a) => fileOf(a?.id, a?.name, serverConfig.fileTypes.attachments));
-      if (atts.length) doc = await uploadAttachments(doc, atts, 'documents');
+      if (atts.length) doc = await uploadAttachments(doc, atts);
       await syncDocReminder(doc, !!d.remind);
     }
   } catch (err) {
