@@ -2,7 +2,8 @@
 
 // Texts come from i18n.js: t(key, params) and tn(key, count, params).
 // Domain rules shared with the server come from core.js (CarMaint).
-const { addDays, addMonths, daysBetween, UPCOMING_DAYS, kmPerDay, inspectionReminder, reminderStatus, weekColumn,
+const { daysBetween, UPCOMING_DAYS, kmPerDay, inspectionReminder, reminderStatus, weekColumn,
+  intervalOf, dueFrom, DOC_REMIND_DAYS, docReminderDate,
   COST_TYPES, sumCosts: sum, costsByType: byType, monthTotals, kmDriven, runningCostPerKm, yearFigures, allYearsFigures } = CarMaint;
 
 const THEME_KEY = 'carmaint:theme';
@@ -492,7 +493,6 @@ const historyFor = (carId) => entriesFor(carId).filter((e) => e.type !== 'docume
 // "documents" are moved once (files included); the entry is removed afterwards.
 const DOC_KINDS = ['registration', 'license', 'insurance', 'warranty', 'other'];
 const DOC_KIND_ICONS = { registration: 'idCard', license: 'idCard', insurance: 'shield', warranty: 'shield', other: 'file' };
-const DOC_REMIND_DAYS = 30;
 
 function guessDocKind(title) {
   if (/führer|licen[cs]e|conduire|conducir/i.test(title)) return 'license';
@@ -2218,7 +2218,7 @@ function openEntryDialog(entry, reminder = null) {
   $('#saveNext').hidden = !isNew || !!reminder;
   renderTemplates();
   const r = several ? null : reminder?.r;
-  setRemind(r ? { km: r.intervalKm, months: r.intervalMonths || (r.virtual ? 24 : 0) } : null);
+  setRemind(r ? intervalOf(r) : null);
   $('#recentShops').innerHTML = recentShops();
   $('#entryDialogTitle').innerHTML = isNew ? t('entry.new', { car: `<span class="dim">${esc(carName(car))}</span>` }) : esc(t('entry.edit'));
   updateEntryHints();
@@ -2312,11 +2312,8 @@ function updateEntryHints() {
   const on = f.namedItem('remind').checked;
   const kmNext = num(f.namedItem('remindKm').value);
   const months = num(f.namedItem('remindMonths').value);
-  const date = f.namedItem('date').value;
-  const due = [
-    kmNext && km((mileage || car.mileage || 0) + kmNext),
-    months && date && fmtMonthYear(addMonths(date, months)),
-  ].filter(Boolean);
+  const next = dueFrom({ km: kmNext, months }, { date: f.namedItem('date').value, mileage: mileage || car.mileage || 0 });
+  const due = [next.dueKm && km(next.dueKm), next.dueDate && fmtMonthYear(next.dueDate)].filter(Boolean);
   $('#remindBox').classList.toggle('off', !on);
   $('#remindDue').innerHTML = on && due.length ? `→ ${t('remind.due')} ${due.map((d) => `<strong>${esc(d)}</strong>`).join(' / ')}` : '';
 }
@@ -2379,33 +2376,53 @@ async function bumpMileage(car, mileage) {
   }
 }
 
-// After saving: create/update the reminder for the next time, or remove a
-// completed one. The MFK from the vehicle data is moved forward in the vehicle data.
-async function scheduleReminder(car, entry, next, completed) {
-  const r = completed?.r;
+/* ---------- Reminder lifecycle ---------- */
+// Every reminder write happens here (when one is due is decided in core.js).
+
+// After an entry was saved. Several completed reminders (states) each start again with
+// their own interval; otherwise the completed one (or none) takes `next` from the dialog
+// ({ km, months }, null = no reminder).
+async function remindAfterEntry(carId, entry, completed, next) {
+  const list = Array.isArray(completed) ? completed.map((s) => [s.r, intervalOf(s.r)]) : [[completed?.r, next]];
+  for (const [r, interval] of list) await scheduleReminder(carById(carId), entry, r, interval);
+}
+
+// Creates/updates the reminder for the next time, or removes a completed one without
+// an interval. The MFK from the vehicle data is moved forward in the vehicle data.
+async function scheduleReminder(car, entry, r, interval) {
+  const due = dueFrom(interval ?? {}, { date: entry.date, mileage: entry.mileage || car.mileage || 0 });
   if (r?.virtual) {
     const info = { ...car.info, lastInspection: entry.date };
-    if (next?.months) info.nextInspection = addMonths(entry.date, next.months);
+    if (due.dueDate) info.nextInspection = due.dueDate;
     else delete info.nextInspection;
-    await store.save('cars', { info }, car.id);
-    return;
+    return store.save('cars', { info }, car.id);
   }
-  if (!next?.km && !next?.months) {
-    if (r) await store.remove('reminders', r.id);
-    return;
-  }
+  if (!due.dueKm && !due.dueDate) return r ? store.remove('reminders', r.id) : null;
   const same = (x) => x.car === car.id && x.title.trim().toLowerCase() === entry.title.trim().toLowerCase();
   const target = r ?? db.reminders.find(same);
   // A completed reminder keeps its name ("Oil change", not "Oil change incl. filter")
-  const data = {
-    title: r?.title ?? entry.title,
-    type: r?.type ?? entry.type,
-    intervalKm: next.km || 0,
-    intervalMonths: next.months || 0,
-    dueKm: next.km ? (entry.mileage || car.mileage || 0) + next.km : 0,
-    dueDate: next.months ? addMonths(entry.date, next.months) : '',
-  };
-  await store.save('reminders', target ? data : { ...data, car: car.id }, target?.id);
+  const data = { title: r?.title ?? entry.title, type: r?.type ?? entry.type, ...due };
+  return store.save('reminders', target ? data : { ...data, car: car.id }, target?.id);
+}
+
+// From the reminder dialog: due values left empty come from the interval and today's state.
+async function saveReminder(car, { title, type, intervalKm, intervalMonths, dueKm, dueDate }, id) {
+  const due = dueFrom({ km: intervalKm, months: intervalMonths }, { date: today(), mileage: car.mileage || 0 });
+  const data = { title, type, ...due, dueKm: dueKm || due.dueKm, dueDate: dueDate || due.dueDate };
+  if (!data.dueKm && !data.dueDate) throw new Error(t('rem.needDue'));
+  return store.save('reminders', id ? data : { ...data, car: car.id }, id);
+}
+
+// Creates, moves or removes the reminder before a document expires.
+async function syncDocReminder(doc, remind) {
+  const current = doc.reminder && reminderById(doc.reminder);
+  if (remind && doc.validUntil) {
+    const data = { title: t('doc.reminderTitle', { title: doc.title }), type: 'documents', intervalKm: 0, intervalMonths: 0, dueKm: 0, dueDate: docReminderDate(doc.validUntil) };
+    const r = await store.save('reminders', current ? data : { ...data, car: doc.car }, current?.id);
+    return r.id === doc.reminder ? doc : store.save('documents', { reminder: r.id }, doc.id);
+  }
+  if (current) await store.remove('reminders', current.id);
+  return doc.reminder ? store.save('documents', { reminder: '' }, doc.id) : doc;
 }
 
 // "Save & add another": keep car, date, mileage and workshop, clear the rest.
@@ -2445,14 +2462,10 @@ entryForm.addEventListener('submit', (ev) => {
     if (files.length) entry = await uploadAttachments(entry, files);
 
     await bumpMileage(carById(f.car), data.mileage);
-    if (Array.isArray(draft.reminder)) {
-      for (const s of draft.reminder) {
-        const next = { km: s.r.intervalKm, months: s.r.intervalMonths || (s.r.virtual ? 24 : 0) };
-        await scheduleReminder(carById(f.car), entry, next, s);
-      }
-    } else if (!existing) {
+    // Completed reminders, or the reminder for the next time (only for new entries)
+    if (Array.isArray(draft.reminder) || !existing) {
       const next = f.remind ? { km: num(f.remindKm), months: num(f.remindMonths) } : null;
-      await scheduleReminder(carById(f.car), entry, next, draft.reminder);
+      await remindAfterEntry(f.car, entry, draft.reminder, next);
     }
 
     if (another) resetForNext();
@@ -2557,20 +2570,9 @@ reminderForm.addEventListener('submit', (ev) => {
   ev.preventDefault();
   withBusy(reminderForm, async () => {
     const f = Object.fromEntries(new FormData(reminderForm));
-    const car = carById(f.car);
-    const intervalKm = num(f.intervalKm) || 0;
-    const intervalMonths = num(f.intervalMonths) || 0;
-    // Empty due values are calculated from the interval and today's state
-    const data = {
-      title: f.title.trim(),
-      type: f.type,
-      intervalKm,
-      intervalMonths,
-      dueKm: num(f.dueKm) || (intervalKm ? (car.mileage || 0) + intervalKm : 0),
-      dueDate: f.dueDate || (intervalMonths ? addMonths(today(), intervalMonths) : ''),
-    };
-    if (!data.dueKm && !data.dueDate) throw new Error(t('rem.needDue'));
-    await store.save('reminders', f.id ? data : { ...data, car: car.id }, f.id);
+    await saveReminder(carById(f.car), {
+      title: f.title.trim(), type: f.type, intervalKm: num(f.intervalKm), intervalMonths: num(f.intervalMonths), dueKm: num(f.dueKm), dueDate: f.dueDate,
+    }, f.id);
     reminderDialog.close();
     route();
     toast(t('toast.reminderSaved'));
@@ -2630,7 +2632,7 @@ function openDocDialog(carId, doc = null) {
 function updateDocRemind() {
   const until = docForm.elements.namedItem('validUntil').value;
   $('#docRemindBox').hidden = !until;
-  if (until) $('#docRemindText').innerHTML = t('doc.remind', { days: `<strong>${esc(tn('doc.days', DOC_REMIND_DAYS))}</strong>`, date: esc(fmtDateNum(addDays(until, -DOC_REMIND_DAYS))) });
+  if (until) $('#docRemindText').innerHTML = t('doc.remind', { days: `<strong>${esc(tn('doc.days', DOC_REMIND_DAYS))}</strong>`, date: esc(fmtDateNum(docReminderDate(until))) });
 }
 
 // The name follows the kind until it is changed by hand.
@@ -2676,18 +2678,6 @@ docDialog.addEventListener('paste', (ev) => {
   queueFiles(docDraft, files);
   renderDraft(docDraft, $('#docFiles'), docFile);
 });
-
-// Creates, moves or removes the reminder before the document expires.
-async function syncDocReminder(doc, remind) {
-  const current = doc.reminder && reminderById(doc.reminder);
-  if (remind && doc.validUntil) {
-    const data = { title: t('doc.reminderTitle', { title: doc.title }), type: 'documents', intervalKm: 0, intervalMonths: 0, dueKm: 0, dueDate: addDays(doc.validUntil, -DOC_REMIND_DAYS) };
-    const r = await store.save('reminders', current ? data : { ...data, car: doc.car }, current?.id);
-    return r.id === doc.reminder ? doc : store.save('documents', { reminder: r.id }, doc.id);
-  }
-  if (current) await store.remove('reminders', current.id);
-  return doc.reminder ? store.save('documents', { reminder: '' }, doc.id) : doc;
-}
 
 docForm.addEventListener('submit', (ev) => {
   ev.preventDefault();

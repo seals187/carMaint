@@ -137,3 +137,22 @@ test('allYearsFigures: full years, extrapolation and the running year', () => {
   assert.equal(g.perYear, 2100 / 16 * 12);
   assert.equal(g.buckets[0].partialStart, true);
 });
+
+/* ---------- Reminder schedule ---------- */
+
+test('intervalOf: the MFK repeats every 24 months', () => {
+  assert.deepEqual(core.intervalOf({ intervalKm: 15000, intervalMonths: 12 }), { km: 15000, months: 12 });
+  assert.deepEqual(core.intervalOf({ virtual: true, intervalMonths: 0 }), { km: 0, months: 24 });
+});
+
+test('dueFrom: next due values from an interval', () => {
+  assert.deepEqual(core.dueFrom({ km: 15000, months: 12 }, { date: '2026-01-31', mileage: 20000 }),
+    { intervalKm: 15000, intervalMonths: 12, dueKm: 35000, dueDate: '2027-01-31' });
+  assert.deepEqual(core.dueFrom({ months: 1 }, { date: '2026-01-31', mileage: 0 }),
+    { intervalKm: 0, intervalMonths: 1, dueKm: 0, dueDate: '2026-02-28' });
+  assert.deepEqual(core.dueFrom(undefined, { date: '2026-01-31' }), { intervalKm: 0, intervalMonths: 0, dueKm: 0, dueDate: '' });
+});
+
+test('docReminderDate: 30 days before expiry', () => {
+  assert.equal(core.docReminderDate('2026-12-31'), '2026-12-01');
+});

@@ -55,6 +55,23 @@
     return { virtual: true, type: 'inspection', dueDate: next, dueKm: 0, intervalKm: 0, intervalMonths: 0 };
   }
 
+  // Interval for the next time after completing a reminder; the MFK from the
+  // vehicle data has none stored and repeats every 24 months by default.
+  const MFK_INTERVAL_MONTHS = 24;
+  const intervalOf = (r) => ({ km: r.intervalKm || 0, months: r.intervalMonths || (r.virtual ? MFK_INTERVAL_MONTHS : 0) });
+
+  // Reminder fields for an interval ({ km, months }) counted from a day and mileage
+  const dueFrom = ({ km = 0, months = 0 } = {}, { date, mileage = 0 }) => ({
+    intervalKm: km || 0,
+    intervalMonths: months || 0,
+    dueKm: km ? (mileage || 0) + km : 0,
+    dueDate: months && isIsoDate(date) ? addMonths(date, months) : '',
+  });
+
+  // Documents remind this many days before they expire
+  const DOC_REMIND_DAYS = 30;
+  const docReminderDate = (validUntil) => addDays(validUntil, -DOC_REMIND_DAYS);
+
   // Where a reminder stands on a day. r: { dueKm, dueDate, intervalKm, intervalMonths };
   // ctx: { mileage, today, kmPerDay }.
   //   kmLeft / days  – distance to each limit (null if the limit is not set)
@@ -198,7 +215,7 @@
   return {
     isIsoDate, dayNumber, isoOfDay, daysBetween, addDays, addMonths,
     SOON_KM, SOON_DAYS, UPCOMING_KM, UPCOMING_DAYS, KM_PER_DAY_DEFAULT,
-    kmPerDay, inspectionReminder, reminderStatus, weekColumn,
+    kmPerDay, inspectionReminder, reminderStatus, weekColumn, MFK_INTERVAL_MONTHS, intervalOf, dueFrom, DOC_REMIND_DAYS, docReminderDate,
     COST_TYPES, costType, sumCosts, costsByType, monthTotals, kmDriven, runningCostPerKm, yearFigures, allYearsFigures,
   };
 });
