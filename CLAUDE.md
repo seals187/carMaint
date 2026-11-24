@@ -21,7 +21,7 @@ Switzerland (CHF, MFK, Stammnummer, Typengenehmigung).
 | `test/` | `node --test` tests for the pure modules |
 | `pb_public/fonts/` | Anton font subset (A–Z, SIL OFL) for the text logo |
 | `pb_migrations/` | PocketBase schema and API rules (JS migrations) |
-| `pb_hooks/` | Server logic: `config.js` reads `.env`; `carmaint.pb.js` creates the admin, applies settings, serves `GET /api/carmaint/config`; `notify.js` sends the daily reminder mails (cron); `storage.js` storage usage; `previews.js` renders PDF previews with poppler; `backup.js` automatic server backups (schedule in `pb_data/carmaint-backup.json`, set by admins in the UI, not in `.env`) |
+| `pb_hooks/` | Server logic: `config.js` reads `.env`; `carmaint.pb.js` creates the admin, applies settings, serves `GET /api/carmaint/config`; `notify.js` sends the daily reminder mails (cron); `storage.js` storage usage; `previews.js` renders PDF previews with poppler; `backup.js` automatic server backups (schedule in `pb_data/carmaint-backup.json`, set by admins in the UI, not in `.env`); `access.js` who may do what (admin, backup, notify, demo restrictions) |
 | `Dockerfile` | Alpine + PocketBase (checksum-verified), non-root user, multi-arch |
 | `.github/workflows/` | `docker.yml` (build/publish image), `release.yml` (GitHub release from CHANGELOG) |
 | `dev.ps1` | Local run on Windows without Docker |

@@ -196,7 +196,7 @@ function sendPush(cfg, url, title, body) {
   if (res.statusCode < 200 || res.statusCode >= 300) throw new Error(`Push failed (HTTP ${res.statusCode})`);
 }
 
-const demoBlocked = (cfg, user) => !!cfg.demoUsername && user.getString('username') === cfg.demoUsername && cfg.demoDisabled.includes('notify');
+const access = require(`${__hooks}/access.js`);
 
 // Hourly run: notifies every user whose hour it is. Returns the number of users notified.
 // force = ignore hour and weekday (admin test).
@@ -209,7 +209,7 @@ function run(app, cfg, force = false) {
     const settings = settingsOf(user);
     const opts = options(cfg, settings.notify);
     const email = cfg.mailEnabled ? opts.email : '';
-    if ((!email && !opts.push) || demoBlocked(cfg, user)) continue;
+    if ((!email && !opts.push) || !access.can(cfg, user, 'notify')) continue;
     if (!force && (now.getHours() !== opts.hour || (opts.frequency === 'weekly' && now.getDay() !== 1))) continue;
     try {
       const lang = settings.language;
@@ -261,4 +261,4 @@ function test(app, cfg, user, settings, email, push) {
 // Settings of a user with defaults (core.js); the language is always one of TEXTS
 const settingsOf = (user) => core.userSettings(parse(user.getString('settings')), { language: 'en' });
 
-module.exports = { run, preview, test, isEmail, demoBlocked, settingsOf };
+module.exports = { run, preview, test, isEmail, settingsOf };

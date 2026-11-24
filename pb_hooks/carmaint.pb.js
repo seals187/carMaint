@@ -52,18 +52,23 @@ onBootstrap((be) => {
       }
     }
 
+    // Users created from .env start with the server's default currency
+    const createUser = (username, password, role) => {
+      const user = new Record(e.app.findCollectionByNameOrId('users'));
+      user.set('username', username);
+      user.set('role', role);
+      user.set('settings', { currency: cfg.defaultCurrency });
+      user.setPassword(password);
+      user.setVerified(true);
+      e.app.save(user);
+      log.info(`CarMaint: ${role === 'admin' ? 'admin' : 'demo'} user created`, 'username', username);
+    };
+
     // First user = admin (only if no user exists yet)
     if (cfg.adminUsername && cfg.adminPassword) {
       try {
         if (e.app.countRecords('users') === 0) {
-          const user = new Record(e.app.findCollectionByNameOrId('users'));
-          user.set('username', cfg.adminUsername);
-          user.set('role', 'admin');
-          user.set('settings', { currency: cfg.defaultCurrency });
-          user.setPassword(cfg.adminPassword);
-          user.setVerified(true);
-          e.app.save(user);
-          log.info('CarMaint: admin user created', 'username', cfg.adminUsername);
+          createUser(cfg.adminUsername, cfg.adminPassword, 'admin');
         } else if (cfg.adminResetPassword) {
           const user = e.app.findFirstRecordByData('users', 'username', cfg.adminUsername);
           user.set('role', 'admin');
@@ -82,14 +87,7 @@ onBootstrap((be) => {
         e.app.findFirstRecordByData('users', 'username', cfg.demoUsername);
       } catch {
         try {
-          const user = new Record(e.app.findCollectionByNameOrId('users'));
-          user.set('username', cfg.demoUsername);
-          user.set('role', 'user');
-          user.set('settings', { currency: cfg.defaultCurrency });
-          user.setPassword(cfg.demoPassword);
-          user.setVerified(true);
-          e.app.save(user);
-          log.info('CarMaint: demo user created', 'username', cfg.demoUsername);
+          createUser(cfg.demoUsername, cfg.demoPassword, 'user');
         } catch (err) {
           log.error('CarMaint: could not create the demo user', 'error', String(err));
         }
@@ -152,7 +150,7 @@ cronAdd('carmaint-notify', '0 * * * *', () => {
 routerAdd('POST', '/api/carmaint/notify/test', (e) => {
   const cfg = require(`${__hooks}/config.js`);
   const notify = require(`${__hooks}/notify.js`);
-  if (notify.demoBlocked(cfg, e.auth)) throw new ForbiddenError('Not allowed for the demo user.');
+  require(`${__hooks}/access.js`).check(cfg, e.auth, 'notify');
   const body = e.requestInfo().body;
   const email = cfg.mailEnabled && notify.isEmail(body.email) ? String(body.email).trim() : '';
   const push = String(body.push || '').trim();
@@ -175,8 +173,8 @@ routerAdd('POST', '/api/carmaint/notify/preview', (e) => {
 
 // Send the notifications now, regardless of hour and weekday (admins only) – for testing
 routerAdd('POST', '/api/carmaint/notify/run', (e) => {
-  if (e.auth.getString('role') !== 'admin') throw new ForbiddenError('Admins only.');
   const cfg = require(`${__hooks}/config.js`);
+  require(`${__hooks}/access.js`).check(cfg, e.auth, 'admin');
   return e.json(200, { sent: require(`${__hooks}/notify.js`).run(e.app, cfg, true) });
 }, $apis.requireAuth());
 
@@ -194,23 +192,23 @@ cronAdd('carmaint-backup', '* * * * *', () => {
   }
 });
 
-// Schedule and existing backups (admins only, settings page)
+// Backup routes: admins only, and not for the demo user when "backup" is disabled
+// (access.js). Schedule and existing backups for the settings page:
 routerAdd('GET', '/api/carmaint/backups', (e) => {
+  require(`${__hooks}/access.js`).check(require(`${__hooks}/config.js`), e.auth, 'backup');
   const backup = require(`${__hooks}/backup.js`);
-  backup.guard(require(`${__hooks}/config.js`), e.auth);
   return e.json(200, { schedule: backup.schedule(e.app), intervals: backup.INTERVALS, keepMax: backup.KEEP_MAX, safetyPrefix: backup.SAFETY_PREFIX, backups: backup.list(e.app) });
 }, $apis.requireAuth());
 
 routerAdd('PUT', '/api/carmaint/backups/schedule', (e) => {
-  const backup = require(`${__hooks}/backup.js`);
-  backup.guard(require(`${__hooks}/config.js`), e.auth);
-  return e.json(200, backup.saveSchedule(e.app, e.requestInfo().body));
+  require(`${__hooks}/access.js`).check(require(`${__hooks}/config.js`), e.auth, 'backup');
+  return e.json(200, require(`${__hooks}/backup.js`).saveSchedule(e.app, e.requestInfo().body));
 }, $apis.requireAuth());
 
 // Back up now
 routerAdd('POST', '/api/carmaint/backups', (e) => {
+  require(`${__hooks}/access.js`).check(require(`${__hooks}/config.js`), e.auth, 'backup');
   const backup = require(`${__hooks}/backup.js`);
-  backup.guard(require(`${__hooks}/config.js`), e.auth);
   try {
     return e.json(200, { name: backup.run(e.app) });
   } catch (err) {
@@ -221,11 +219,9 @@ routerAdd('POST', '/api/carmaint/backups', (e) => {
 
 // Restore: on success the server restarts and the connection simply drops
 routerAdd('POST', '/api/carmaint/backups/{name}/restore', (e) => {
+  require(`${__hooks}/access.js`).check(require(`${__hooks}/config.js`), e.auth, 'backup');
   const backup = require(`${__hooks}/backup.js`);
-  backup.guard(require(`${__hooks}/config.js`), e.auth);
-  const name = e.request.pathValue('name');
-  if (!/^[\w@.-]+\.zip$/.test(name)) throw new BadRequestError('Invalid name.');
-  if (!backup.exists(e.app, name)) throw new NotFoundError();
+  const name = backup.existing(e.app, e.request.pathValue('name'));
   try {
     e.app.logger().warn('CarMaint: restoring a backup', 'name', name, 'user', e.auth.getString('username'));
     backup.restore(e.app, name);
@@ -237,32 +233,25 @@ routerAdd('POST', '/api/carmaint/backups/{name}/restore', (e) => {
 }, $apis.requireAuth());
 
 routerAdd('DELETE', '/api/carmaint/backups/{name}', (e) => {
+  require(`${__hooks}/access.js`).check(require(`${__hooks}/config.js`), e.auth, 'backup');
   const backup = require(`${__hooks}/backup.js`);
-  backup.guard(require(`${__hooks}/config.js`), e.auth);
-  const name = e.request.pathValue('name');
-  if (!/^[\w@.-]+\.zip$/.test(name)) throw new BadRequestError('Invalid name.');
-  if (!backup.exists(e.app, name)) throw new NotFoundError();
-  backup.remove(e.app, name);
+  backup.remove(e.app, backup.existing(e.app, e.request.pathValue('name')));
   return e.noContent(204);
 }, $apis.requireAuth());
 
 routerAdd('GET', '/api/carmaint/backups/{name}', (e) => {
+  require(`${__hooks}/access.js`).check(require(`${__hooks}/config.js`), e.auth, 'backup');
   const backup = require(`${__hooks}/backup.js`);
-  backup.guard(require(`${__hooks}/config.js`), e.auth);
-  const name = e.request.pathValue('name');
-  if (!/^[\w@.-]+\.zip$/.test(name)) throw new BadRequestError('Invalid name.');
-  backup.serve(e.app, e, name);
+  backup.serve(e.app, e, backup.existing(e.app, e.request.pathValue('name')));
 }, $apis.requireAuth());
 
-// Demo user: block disabled settings on the server, not only in the UI.
-// The username is locked too, otherwise renaming would lift the restrictions.
+// Demo user: block disabled settings on the server, not only in the UI (access.js).
 onRecordUpdateRequest((e) => {
   const cfg = require(`${__hooks}/config.js`);
-  const auth = e.auth;
-  if (cfg.demoUsername && auth && auth.id === e.record.id && auth.getString('username') === cfg.demoUsername) {
+  if (e.auth && e.auth.id === e.record.id) {
     const body = e.requestInfo().body;
-    const blocked = ['username', ...(cfg.demoDisabled.includes('password') ? ['password', 'oldPassword', 'passwordConfirm'] : [])];
-    if (blocked.some((key) => body[key] !== undefined)) {
+    const locked = require(`${__hooks}/access.js`).lockedFields(cfg, e.auth);
+    if (locked.some((key) => body[key] !== undefined)) {
       throw new ForbiddenError('Not allowed for the demo user.');
     }
   }
@@ -328,8 +317,8 @@ routerAdd('GET', '/api/carmaint/usage', (e) => {
 // Storage used by every user (admins only, user list in the settings).
 // Only totals are returned, no information about the files themselves.
 routerAdd('GET', '/api/carmaint/usage/users', (e) => {
-  if (e.auth.getString('role') !== 'admin') throw new ForbiddenError('Admins only.');
   const cfg = require(`${__hooks}/config.js`);
+  require(`${__hooks}/access.js`).check(cfg, e.auth, 'admin');
   const { usage } = require(`${__hooks}/storage.js`);
   const users = {};
   for (const user of e.app.findAllRecords('users')) users[user.id] = usage(e.app, user.id);

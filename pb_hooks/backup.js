@@ -20,12 +20,11 @@ const pad = (n) => String(n).padStart(2, '0');
 const file = (app) => `${app.dataDir()}/carmaint-backup.json`;
 const stamp = (d = new Date()) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 
-// Admins only, and not for the demo user when disabled (DEMO_DISABLED)
-function guard(cfg, user) {
-  const demo = !!cfg.demoUsername && user.getString('username') === cfg.demoUsername;
-  if (user.getString('role') !== 'admin' || (demo && cfg.demoDisabled.includes('backup'))) {
-    throw new ForbiddenError('Not allowed.');
-  }
+// A backup name from a request: 400 if invalid, 404 if there is no such backup
+function existing(app, name) {
+  if (!/^[\w@.-]+\.zip$/.test(name || '')) throw new BadRequestError('Invalid name.');
+  if (!exists(app, name)) throw new NotFoundError();
+  return name;
 }
 
 // Schedule with defaults; invalid values are replaced
@@ -140,7 +139,6 @@ function restore(app, name) {
 function serve(app, e, name) {
   const fs = app.newBackupsFilesystem();
   try {
-    if (!fs.exists(name)) throw new NotFoundError();
     const reader = fs.getReader(name);
     try {
       e.response.header().set('Content-Disposition', `attachment; filename="${name}"`);
@@ -153,4 +151,4 @@ function serve(app, e, name) {
   }
 }
 
-module.exports = { INTERVALS, KEEP_MAX, SAFETY_PREFIX, guard, schedule, saveSchedule, dueBetween, list, run, exists, remove, restore, serve };
+module.exports = { INTERVALS, KEEP_MAX, SAFETY_PREFIX, existing, schedule, saveSchedule, dueBetween, list, run, remove, restore, serve };
