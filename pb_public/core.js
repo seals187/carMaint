@@ -92,9 +92,113 @@
     return status.soonest <= toSunday ? 'soon' : status.soonest <= toSunday + 7 ? 'next' : 'upcoming';
   }
 
+  /* ---------- Cost figures ---------- */
+
+  // Entries: { car, type, date, mileage, cost }; cars: { id, mileage, info }.
+  // Stack order of the charts (neighbouring colours stay apart for colour-blind readers)
+  const COST_TYPES = ['fuel', 'service', 'inspection', 'tires', 'repair', 'other'];
+  const MIN_KM_PER_KM = 100; // cost per km only once this many km are known
+  const costType = (e) => (COST_TYPES.includes(e.type) ? e.type : 'other');
+  const sumCosts = (list) => list.reduce((total, e) => total + (Number(e.cost) || 0), 0);
+  const costsByType = (list) => Object.fromEntries(COST_TYPES.map((type) => [type, sumCosts(list.filter((e) => costType(e) === type))]));
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const monthTotals = (list, year) => Array.from({ length: 12 }, (_, i) => sumCosts(list.filter((e) => e.date.startsWith(`${year}-${pad2(i + 1)}`))));
+
+  // Kilometres covered per car from the mileages of the entries; withCurrent: the car's
+  // current mileage counts as the latest value (not for past years)
+  function kmDriven(cars, entries, withCurrent = true) {
+    let driven = 0;
+    for (const car of cars) {
+      const values = entries.filter((e) => e.car === car.id).map((e) => e.mileage).filter(Boolean);
+      if (withCurrent && car.mileage) values.push(car.mileage);
+      if (values.length > 1) driven += Math.max(...values) - Math.min(...values);
+    }
+    return driven;
+  }
+  const perKm = (total, driven) => (driven >= MIN_KM_PER_KM ? total / driven : null);
+
+  // Running costs per km without fuel (overview and car page); null until enough km are known
+  function runningCostPerKm(cars, entries) {
+    const ids = new Set(cars.map((c) => c.id));
+    const own = entries.filter((e) => ids.has(e.car));
+    return perKm(sumCosts(own.filter((e) => e.type !== 'fuel')), kmDriven(cars, own));
+  }
+
+  // Parts of a bar: keys in their order, keyOf(entry) -> key (default: the cost type)
+  const partsOf = (list, keys, keyOf) => keys
+    .map((key) => ({ key, value: sumCosts(list.filter((e) => keyOf(e) === key)) }))
+    .filter((p) => p.value);
+
+  // One year (costed entries of the cars). Compared with the same months of the year before
+  // while the year is running. Buckets: one per month with parts, the previous year's
+  // value (prev), future (not reached yet) and top (key of a part that makes the month
+  // an outlier: at least twice the average and 60 % of the month).
+  function yearFigures({ entries, cars, year, today, keys = COST_TYPES, keyOf = costType }) {
+    const current = year === today.slice(0, 4);
+    const months = current ? Number(today.slice(5, 7)) : 12;
+    const period = entries.filter((e) => e.date.startsWith(year));
+    const prevYear = String(Number(year) - 1);
+    const prevAll = entries.filter((e) => e.date.startsWith(prevYear));
+    const prevSame = prevAll.filter((e) => e.date <= `${prevYear}-${pad2(months)}-31`);
+    const total = sumCosts(period);
+    const types = costsByType(period);
+    const avg = total / months;
+    const driven = kmDriven(cars, period, current);
+    const prevMonths = monthTotals(prevAll, prevYear);
+    const buckets = Array.from({ length: 12 }, (_, i) => {
+      const list = period.filter((e) => e.date.startsWith(`${year}-${pad2(i + 1)}`));
+      const parts = partsOf(list, keys, keyOf);
+      const b = { month: i + 1, total: sumCosts(list), parts, future: i + 1 > months };
+      if (prevAll.length) b.prev = prevMonths[i];
+      const top = parts.reduce((a, p) => (p.value > (a ? a.value : 0) ? p : a), null);
+      if (top && b.total >= 2 * avg && top.value / b.total >= 0.6) b.top = top.key;
+      return b;
+    });
+    return {
+      year, current, months, total, types, avg, driven, perKm: perKm(total, driven),
+      prevYear, hasPrev: prevAll.length > 0, prevSameTotal: sumCosts(prevSame),
+      // Types of the year before: the same months while the year is running, else the whole year
+      prevTypes: costsByType(current ? prevSame : prevAll),
+      projection: current && months < 12 ? avg * 12 : null,
+      noFuel: total - types.fuel,
+      buckets,
+    };
+  }
+
+  // All years since the first entry or the purchase: totals, average per full year
+  // (extrapolated without one), and one bucket per year (at most twelve). The running
+  // year gets an estimate for its remaining months (estimateTop).
+  function allYearsFigures({ entries, cars, today, purchaseDate = '', keys = COST_TYPES, keyOf = costType }) {
+    const now = today.slice(0, 4);
+    const months = Number(today.slice(5, 7));
+    const total = sumCosts(entries);
+    const types = costsByType(entries);
+    const first = [purchaseDate, entries.map((e) => e.date).sort()[0]].filter(Boolean).sort()[0] || today;
+    const firstYear = first.slice(0, 4);
+    const firstMonth = Number(first.slice(5, 7));
+    const years = Array.from({ length: Number(now) - Number(firstYear) + 1 }, (_, i) => String(Number(firstYear) + i)).slice(-12);
+    // Full years: not the current one, and the first only if it started in January
+    const full = years.filter((y) => y < now && (y > firstYear || firstMonth === 1));
+    const perYear = full.length ? sumCosts(entries.filter((e) => full.includes(e.date.slice(0, 4)))) / full.length
+      : total / Math.max(1, (Number(now) - Number(firstYear)) * 12 + months - firstMonth + 1) * 12;
+    const driven = kmDriven(cars, entries, true);
+    const price = cars.reduce((n, c) => n + (Number(c.info && c.info.purchasePrice) || 0), 0);
+    const buckets = years.map((y) => {
+      const list = entries.filter((e) => e.date.startsWith(y));
+      const b = { year: y, total: sumCosts(list), parts: partsOf(list, keys, keyOf), partialStart: y === firstYear && firstMonth > 1 };
+      if (y === now && months < 12) {
+        b.running = true;
+        b.estimateTop = b.total / months * 12 - b.total;
+      }
+      return b;
+    });
+    return { first, firstYear, firstMonth, months, years, full, perYear, total, types, driven, perKm: perKm(total, driven), price, noFuel: total - types.fuel, buckets };
+  }
+
   return {
     isIsoDate, dayNumber, isoOfDay, daysBetween, addDays, addMonths,
     SOON_KM, SOON_DAYS, UPCOMING_KM, UPCOMING_DAYS, KM_PER_DAY_DEFAULT,
     kmPerDay, inspectionReminder, reminderStatus, weekColumn,
+    COST_TYPES, costType, sumCosts, costsByType, monthTotals, kmDriven, runningCostPerKm, yearFigures, allYearsFigures,
   };
 });
