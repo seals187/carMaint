@@ -10,9 +10,10 @@
 //   overdue    – repeat overdue reminders: "never", "3" (days) or "7" (days)
 // The last notified stage is stored in the field "notified" (reminder, or car
 // for the next MFK from the vehicle data), so a stage is sent only once.
-// Loaded via require() from the hooks.
+// Loaded via require() from the hooks. When a reminder is due is decided by
+// pb_public/core.js, the same rules the website uses.
 
-const KM_PER_DAY_DEFAULT = 15000 / 365; // when the km driven cannot be estimated
+const core = require(`${__hooks}/../pb_public/core.js`);
 const BEFORE_OPTIONS = [30, 14, 7, 1, 0];
 
 const TEXTS = {
@@ -55,8 +56,7 @@ const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '');
 // Dates in the server time zone (TZ) as day numbers
 const pad = (n) => String(n).padStart(2, '0');
 const localIso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const dayNumber = (iso) => Math.round(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 864e5);
-const isoOfDay = (n) => new Date(n * 864e5).toISOString().slice(0, 10);
+const { dayNumber, isoOfDay } = core;
 
 // Notification options of a user with defaults; invalid values are replaced
 function options(cfg, raw) {
@@ -82,65 +82,55 @@ function format(lang, currency) {
   };
 }
 
-// km per day of a car from its oldest entry with a mileage
-function kmPerDay(app, car, today) {
+// Oldest entry with a mileage, for the km a car drives per day
+function firstMileage(app, car) {
   const first = app.findRecordsByFilter('entries', 'car = {:car} && mileage > 0', 'date', 1, 0, { car: car.id })[0];
-  if (first) {
-    const days = today - dayNumber(first.getString('date'));
-    const km = car.getInt('mileage') - first.getInt('mileage');
-    if (days >= 30 && km > 0) return km / days;
-  }
-  return KM_PER_DAY_DEFAULT;
+  return first ? { date: first.getString('date'), mileage: first.getInt('mileage') } : null;
+}
+
+// Notification stage of a reminder status (core.reminderStatus) on a day number:
+// "overdue" / "overdue-<period>" (repeats), "before-<days>" or '' (nothing to send)
+function stageOf(status, opts, today) {
+  if (status.overdue) return opts.overdue === 'never' ? 'overdue' : `overdue-${Math.floor(today / Number(opts.overdue))}`;
+  const step = opts.before.find((b) => status.soonest <= b);
+  return step === undefined ? '' : `before-${step}`;
 }
 
 // Reminders of a user with their stage on the given day. With frequency "new"
 // only those that reached a stage that was not notified yet.
 function dueItems(app, user, opts, lang, today) {
+  const iso = isoOfDay(today);
   const items = [];
   for (const car of app.findRecordsByFilter('cars', 'owner = {:user}', 'created', 0, 0, { user: user.id })) {
     const mileage = car.getInt('mileage');
-    const info = parse(car.getString('info'));
     const list = app.findRecordsByFilter('reminders', 'car = {:car}', '', 0, 0, { car: car.id }).map((r) => ({
       record: r, title: r.getString('title'), type: r.getString('type'), dueKm: r.getInt('dueKm'), dueDate: r.getString('dueDate'),
+      intervalKm: r.getInt('intervalKm'), intervalMonths: r.getInt('intervalMonths'),
     }));
-    if (info.nextInspection && !list.some((r) => r.type === 'inspection')) {
-      list.push({ record: car, title: TEXTS[lang].mfk, type: 'inspection', dueKm: 0, dueDate: info.nextInspection });
-    }
-    let rate = null;
+    const mfk = core.inspectionReminder(parse(car.getString('info')), list);
+    if (mfk) list.push({ ...mfk, record: car, title: TEXTS[lang].mfk });
+    const rate = list.some((r) => r.dueKm) ? core.kmPerDay(firstMileage(app, car), mileage, iso) : core.KM_PER_DAY_DEFAULT;
     for (const r of list) {
-      const kmLeft = r.dueKm ? r.dueKm - mileage : null;
-      const days = /^\d{4}-\d{2}-\d{2}$/.test(r.dueDate) ? dayNumber(r.dueDate) - today : null;
-      if (kmLeft !== null && rate === null) rate = kmPerDay(app, car, today);
-      const estDays = kmLeft !== null ? Math.round(kmLeft / rate) : null;
-      let stage = '';
-      if ((kmLeft !== null && kmLeft <= 0) || (days !== null && days < 0)) {
-        stage = opts.overdue === 'never' ? 'overdue' : `overdue-${Math.floor(today / Number(opts.overdue))}`;
-      } else {
-        const d = Math.min(days ?? Infinity, estDays ?? Infinity);
-        const step = opts.before.find((b) => d <= b);
-        if (step !== undefined) stage = `before-${step}`;
-      }
+      const status = core.reminderStatus(r, { mileage, today: iso, kmPerDay: rate });
+      const stage = stageOf(status, opts, today);
       if (!stage) continue;
       const key = `${stage}|${r.dueDate}|${r.dueKm}`;
       if (opts.frequency === 'new' && r.record.getString('notified') === key) continue;
-      items.push({ ...r, car, kmLeft, days, estDays, stage, key });
+      items.push({ ...r, ...status, car, stage, key });
     }
   }
-  const rank = (i) => (i.stage.startsWith('overdue') ? 0 : 1);
-  const soon = (i) => Math.min(i.days ?? Infinity, i.estDays ?? Infinity);
-  return items.sort((a, b) => rank(a) - rank(b) || soon(a) - soon(b));
+  return items.sort((a, b) => Number(b.overdue) - Number(a.overdue) || a.soonest - b.soonest);
 }
 
 function itemLabel(i, T, f) {
-  if (i.stage.startsWith('overdue')) {
-    const since = i.days !== null && i.days < 0 ? fill(plural(T.overdueDays, -i.days), { n: -i.days }) : fill(T.overdueKm, { km: f.km(-i.kmLeft) });
+  if (i.overdue) {
+    const since = i.byKm ? fill(T.overdueKm, { km: f.km(-i.kmLeft) }) : fill(plural(T.overdueDays, -i.days), { n: -i.days });
     return { text: `${T.overdue} · ${since}`, color: '#dc2626' };
   }
-  const byDate = i.days !== null && (i.estDays === null || i.days <= i.estDays);
-  if ((byDate ? i.days : i.estDays) <= 0) return { text: T.today, color: '#b45309' };
-  const text = byDate
-    ? fill(plural(T.inDays, i.days), { n: i.days })
-    : `${fill(T.inKm, { km: f.km(i.kmLeft) })} (${fill(plural(T.approx, i.estDays), { n: i.estDays })})`;
+  if (i.soonest <= 0) return { text: T.today, color: '#b45309' };
+  const text = i.byKm
+    ? `${fill(T.inKm, { km: f.km(i.kmLeft) })} (${fill(plural(T.approx, i.estDays), { n: i.estDays })})`
+    : fill(plural(T.inDays, i.days), { n: i.days });
   return { text, color: '#b45309' };
 }
 

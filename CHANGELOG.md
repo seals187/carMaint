@@ -6,6 +6,11 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+### Changed
+- Reminders by mileage: the website and the reminder notifications now estimate the due date the same way, from the
+  km the car actually drives (its oldest entry with a mileage), or 15'000 km per year until that is known. Before,
+  the website assumed 50 km per day. The limit that is reached first (km or date) decides the label in both.
+
 ## [0.2.10] – 2026-10-30
 
 ### Added

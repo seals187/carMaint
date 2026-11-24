@@ -16,6 +16,8 @@ Switzerland (CHF, MFK, Stammnummer, Typengenehmigung).
 | Path | Purpose |
 |---|---|
 | `pb_public/` | Frontend: `index.html`, `style.css`, `i18n.js`, `app.js` – plain JS, **no framework, no build step, no external requests** |
+| `pb_public/core.js` | Pure domain rules (no DOM, no texts, no PocketBase), shared: global `CarMaint` in the browser, `require(\`${__hooks}/../pb_public/core.js\`)` in hooks. Reminder rules live here only |
+| `test/` | `node --test` tests for the pure modules |
 | `pb_public/fonts/` | Anton font subset (A–Z, SIL OFL) for the text logo |
 | `pb_migrations/` | PocketBase schema and API rules (JS migrations) |
 | `pb_hooks/` | Server logic: `config.js` reads `.env`; `carmaint.pb.js` creates the admin, applies settings, serves `GET /api/carmaint/config`; `notify.js` sends the daily reminder mails (cron); `storage.js` storage usage; `previews.js` renders PDF previews with poppler; `backup.js` automatic server backups (schedule in `pb_data/carmaint-backup.json`, set by admins in the UI, not in `.env`) |
@@ -55,10 +57,10 @@ manage users. Files are `protected` and fetched with a short-lived file token.
 
 ## Testing
 
-No test suite in the repo. Before pushing changes, at least:
+Unit tests cover the pure modules (`pb_public/core.js`, …); the UI is tested by hand. Before pushing changes, at least:
 
 ```bash
-node --check pb_public/app.js pb_public/i18n.js pb_hooks/*.js   # e.g. via docker run node:22-alpine
+node --check pb_public/*.js pb_hooks/*.js && node --test   # e.g. via docker run node:22-alpine
 docker build -t carmaint:test .
 docker run --rm -p 8090:8090 -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=test1234 carmaint:test
 ```

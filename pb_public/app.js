@@ -1,6 +1,8 @@
 'use strict';
 
 // Texts come from i18n.js: t(key, params) and tn(key, count, params).
+// Domain rules shared with the server come from core.js (CarMaint).
+const { addDays, addMonths, daysBetween, UPCOMING_DAYS, kmPerDay, inspectionReminder, reminderStatus, weekColumn } = CarMaint;
 
 const THEME_KEY = 'carmaint:theme';
 const AUTH_KEY = 'carmaint:auth';
@@ -43,11 +45,6 @@ const TEMPLATES = [
   { key: 'wipers', type: 'repair' },
 ];
 
-// Reminder levels: overdue (red), soon (yellow), upcoming (still listed on the home page), later
-const SOON_KM = 1000;
-const SOON_DAYS = 7;
-const UPCOMING_KM = 3000;
-const UPCOMING_DAYS = 60;
 const QUICK_KM_STEP = 100;
 // Hues for cars without a photo (stable per car)
 const CAR_HUES = [355, 212, 262, 172, 32, 330];
@@ -165,23 +162,8 @@ const today = () => {
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0, 10);
 };
-const daysUntil = (iso) => Math.round((asDate(iso) - asDate(today())) / 864e5);
+const daysUntil = (iso) => daysBetween(today(), iso);
 const thisYear = () => today().slice(0, 4);
-
-function addDays(iso, days) {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-// "2026-01-31" + 1 month = "2026-02-28"
-function addMonths(iso, months) {
-  const [y, m, d] = iso.split('-').map(Number);
-  const target = new Date(Date.UTC(y, m - 1 + months, 1));
-  const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
-  target.setUTCDate(Math.min(d, last));
-  return target.toISOString().slice(0, 10);
-}
 
 // Fuel values are stored in German (existing data); only the display is translated.
 const FUELS = { Benzin: 'fuel.petrol', Diesel: 'fuel.diesel', Hybrid: 'fuel.hybrid', 'Plug-in-Hybrid': 'fuel.plugin', Elektro: 'fuel.electric', 'Erdgas / LPG': 'fuel.gas' };
@@ -536,58 +518,20 @@ function costPerKm(cars) {
 
 /* ---------- Reminders ---------- */
 
-// The next vehicle inspection (MFK) from the vehicle data counts as a reminder too,
-// unless the car already has its own inspection reminder.
+// Reminders of a car with their status (core.js), most advanced first. The next
+// MFK from the vehicle data counts as a reminder too (virtual, id "mfk:<car>").
 function remindersFor(carId) {
   const car = carById(carId);
   const list = db.reminders.filter((r) => r.car === carId);
-  const next = car.info?.nextInspection;
-  if (next && !list.some((r) => r.type === 'inspection')) {
-    list.push({ id: `mfk:${car.id}`, car: car.id, virtual: true, type: 'inspection', title: t('tpl.inspection'), dueDate: next, dueKm: 0, intervalKm: 0, intervalMonths: 0 });
-  }
-  return list.map(reminderState).sort((a, b) => b.progress - a.progress);
+  const mfk = inspectionReminder(car.info, list);
+  if (mfk) list.push({ ...mfk, id: `mfk:${car.id}`, car: car.id, title: t('tpl.inspection') });
+  const first = db.entries.filter((e) => e.car === carId && e.mileage > 0).sort((a, b) => a.date.localeCompare(b.date))[0];
+  const ctx = { mileage: car.mileage, today: today(), kmPerDay: kmPerDay(first, car.mileage, today()) };
+  return list.map((r) => ({ r, car, ...reminderStatus(r, ctx) })).sort((a, b) => b.progress - a.progress);
 }
 
 const allReminders = () => db.cars.flatMap((c) => remindersFor(c.id));
 const findReminder = (id) => allReminders().find((s) => s.r.id === id);
-
-function reminderState(r) {
-  const car = carById(r.car);
-  const kmLeft = r.dueKm ? r.dueKm - (car.mileage || 0) : null;
-  const days = r.dueDate ? daysUntil(r.dueDate) : null;
-  const within = (kmLimit, dayLimit) => (kmLeft !== null && kmLeft <= kmLimit) || (days !== null && days <= dayLimit);
-  const level = (kmLeft !== null && kmLeft <= 0) || (days !== null && days < 0) ? 'overdue'
-    : within(SOON_KM, SOON_DAYS) ? 'soon'
-    : within(UPCOMING_KM, UPCOMING_DAYS) ? 'upcoming' : 'later';
-  // Share of the interval that has passed (for the progress bar and the order)
-  const kmPart = kmLeft === null ? 0 : 1 - kmLeft / (r.intervalKm || 10000);
-  const dayPart = days === null ? 0 : 1 - days / ((r.intervalMonths || 12) * 30.44);
-  const progress = Math.max(kmPart, dayPart);
-  // Whichever comes first decides the label
-  const byKm = kmLeft !== null && (days === null || kmPart >= dayPart);
-  let label;
-  if (level === 'overdue') {
-    const kmOver = kmLeft !== null && kmLeft <= 0;
-    if (days !== null && days < 0 && (!kmOver || !byKm)) label = tn('due.overdueDays', -days);
-    else label = kmLeft === 0 ? t('due.today') : t('due.overdueKm', { km: km(-kmLeft) });
-  } else if (byKm) {
-    label = level === 'later' ? t('due.atKm', { km: km(r.dueKm) }) : t('due.inKm', { km: km(kmLeft) });
-  } else if (days === 0) {
-    label = t('due.today');
-  } else {
-    label = days <= UPCOMING_DAYS ? tn('due.inDays', days) : fmtMonthYear(r.dueDate);
-  }
-  return { r, car, kmLeft, days, level, label, byKm, progress: Math.min(1, Math.max(0, progress)) };
-}
-
-// "every 15'000 km", "yearly 30.10.", "due 09.10.2026"
-function reminderSchedule(r) {
-  if (r.intervalKm) return t('rem.everyKm', { km: km(r.intervalKm) });
-  if (r.intervalMonths === 12 && r.dueDate) return t('rem.yearly', { date: fmtDayMonth(r.dueDate) });
-  if (r.intervalMonths) return tn('rem.everyMonths', r.intervalMonths);
-  if (r.dueDate) return t('rem.dueOn', { date: fmtDateNum(r.dueDate) });
-  return r.dueKm ? t('rem.dueAt', { km: km(r.dueKm) }) : '';
-}
 
 const documentsFor = (carId) => db.documents.filter((d) => d.car === carId);
 // The history shows maintenance only; documents have their own section.
@@ -862,15 +806,9 @@ function renderHome() {
 // the same reminder on several cars is grouped (collapsible).
 const DUE_COLUMNS = [['overdue', 'due.colOverdue'], ['soon', 'due.colSoon'], ['next', 'due.colNext'], ['upcoming', 'due.colLater']];
 const collapsedDue = new Set();
-// Soonest first; mileage counts as ~50 km per day
-const soonest = (s) => Math.min(s.days ?? Infinity, s.kmLeft === null ? Infinity : s.kmLeft / 50);
-const bySoonest = (a, b) => soonest(a) - soonest(b);
-function dueColumn(s) {
-  if (s.level === 'overdue') return 'overdue';
-  const toSunday = (7 - asDate(today()).getDay()) % 7;
-  const left = soonest(s);
-  return left <= toSunday ? 'soon' : left <= toSunday + 7 ? 'next' : 'upcoming';
-}
+// Soonest first; mileage limits count with the km the car drives per day
+const bySoonest = (a, b) => a.soonest - b.soonest;
+const dueColumn = (s) => weekColumn(s, today());
 // "Do., 22.10." -> "Do, 22.10."
 const noWeekdayDot = (s) => s.replace(/^(\p{L}+)\./u, '$1');
 const fmtDateDay = (iso) => noWeekdayDot(asDate(iso).toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }));
@@ -895,9 +833,7 @@ function dueBoard(due) {
 // Date (or km) that decides, how far away it is, and the other limit if there is one
 function dueWhen(s) {
   const { r, days, kmLeft } = s;
-  // Overdue: whichever limit was actually passed
-  const kmOver = kmLeft !== null && kmLeft <= 0;
-  const byDate = s.level === 'overdue' ? days !== null && days < 0 && !(kmOver && s.byKm) : !!r.dueDate && !s.byKm;
+  const byDate = !s.byKm && days !== null;
   // relDays: like rel, but never falls back to the month for far-away dates
   let rel;
   let relDays;
@@ -957,7 +893,7 @@ const TIMELINE_DAYS = [-7, 30];
 function carTimeline(states) {
   const due = states.filter((s) => s.level !== 'later').sort(bySoonest);
   const list = (due.length ? due : states.slice(0, 1)).slice(0, CARD_DUE_MAX);
-  const days = list.map(soonest);
+  const days = list.map((s) => s.soonest);
   const lo = Math.min(TIMELINE_DAYS[0], ...days);
   const hi = Math.max(TIMELINE_DAYS[1], ...days);
   const pos = (d) => `${(4 + (d - lo) / (hi - lo) * 92).toFixed(1)}%`;
