@@ -15,6 +15,12 @@ the website and the reminder mails must show the same thing.
 New domain rules go into `core.js` with a test in `test/core.test.js`. `core.js` stays pure: no DOM,
 no texts, no PocketBase.
 
+## User settings
+
+A new key in `DEFAULT_SETTINGS` (`core.js`) is validated in `userSettings` and tested in `test/core.test.js`.
+Whether a backup import restores it (`importBackup` in `app.js`) is a decision to make, not to forget: display
+preferences such as currency or units are restored, per-device states are not.
+
 ## Reminder writes go through the lifecycle section
 
 Every create or update of a reminder in `app.js` goes through the *Reminder lifecycle* section

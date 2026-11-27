@@ -6,7 +6,8 @@ Guidance for AI assistants (and humans) working on this repository.
 
 CarMaint is a lightweight, self-hosted maintenance log for vehicles: services, repairs, inspections,
 costs, photos, receipts and vehicle data, with multi-user login. It ships as a single Docker image
-(`ghcr.io/seals187/carmaint`) configured entirely via `.env`.
+(`ghcr.io/seals187/carmaint`) configured entirely via `.env`. The public demo has no seed data in the repo;
+its data is entered by hand.
 
 **Goals:** keep it as light as possible, modern design, compact docs. The primary user is in
 Switzerland (CHF, MFK, Stammnummer, Typengenehmigung).
@@ -19,7 +20,7 @@ Switzerland (CHF, MFK, Stammnummer, Typengenehmigung).
 | `pb_public/core.js` | Pure domain rules (no DOM, no texts, no PocketBase), shared: global `CarMaint` in the browser, `require(\`${__hooks}/../pb_public/core.js\`)` in hooks |
 | `pb_public/store.js` | Record store (global `CarMaintStore`): the only way to write cars, entries, reminders, documents – `store.save/remove/upload` keep `db`, dependent records and the file cache in sync |
 | `test/` | `node --test` checks: syntax, pure modules, UI texts, frontend rules. Node runs every `.js` under `test/`, so no helpers or non-test scripts there |
-| `e2e/` | Before/after browser and API comparison of two builds (`e2e/compare.sh`) |
+| `e2e/` | Before/after browser and API comparison of two builds (`e2e/compare.sh`); `e2e/serve.sh` runs the working tree |
 | `CODING_STANDARDS.md` | Review rules that need judgement |
 | `pb_public/fonts/` | Anton font subset (A–Z, SIL OFL) for the text logo |
 | `pb_migrations/` | PocketBase schema and API rules (JS migrations) |
@@ -28,13 +29,10 @@ Switzerland (CHF, MFK, Stammnummer, Typengenehmigung).
 | `.github/workflows/` | `docker.yml` (build/publish image), `release.yml` (GitHub release from CHANGELOG) |
 | `dev.ps1` | Local run on Windows without Docker |
 
-**Data model:** `users` (auth by `username`, `role` admin/user, `settings` JSON), `cars` (`owner`,
-`photos` – first photo is the cover, `info` JSON), `entries` (`car`, `type`, `date` as `YYYY-MM-DD`,
-`attachments`, `attachmentNames` JSON, server-made `previews` + `fileInfo`; refuels: `litres`, `partial` –
-consumption terms in `GLOSSARY.md`), `reminders` (`car`, `title`, `type`, `intervalKm`/`intervalMonths`,
-`dueKm`/`dueDate`), `documents` (`car`, `kind`, `title`, `validUntil`, `attachments`, `attachmentNames`,
-`reminder`). Access rules: every user only sees their own data; admins
-manage users. Files are `protected` and fetched with a short-lived file token.
+**Data model:** collections and fields in `pb_migrations/`, domain terms in `GLOSSARY.md`. What the schema does
+not say: the first car photo is the cover; `previews` and `fileInfo` are made by the server; a refuel without
+`litres` counts for costs only. Every user only sees their own data; admins manage users. Files are
+`protected` and fetched with a short-lived file token.
 
 ## Conventions
 
@@ -67,8 +65,10 @@ manage users. Files are `protected` and fetched with a short-lived file token.
 - `e2e/compare.sh [BASE_REF] [NEW_REF]` – for changes to behaviour or refactors: builds `main` and the
   working tree, walks the UI and the guarded API routes in both and diffs the output. Every difference
   must be intended.
-- By hand in a browser (`docker run --rm -p 8090:8090 -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=test1234 <image>`):
-  all languages, light/dark mode, mobile width – the e2e run covers English, light, desktop and phone.
+- `e2e/serve.sh [NAME] [PORT]` – the working tree with fresh data (admin / test1234) for a look or an ad-hoc
+  browser script. New features get steps in `e2e/ui.js`, so `compare.sh` covers them from then on.
+- By hand in a browser (`e2e/serve.sh cm-dev 8090`): all languages, light/dark mode, mobile width – the e2e run
+  covers English, light, desktop and phone, and reports figures cut off with "…" (`CLIPPED`).
 - Workflows: `actionlint`.
 
 ## Releases
@@ -77,5 +77,6 @@ manage users. Files are `protected` and fetched with a short-lived file token.
   `[Unreleased]` (Keep a Changelog format).
 - Release: rename `[Unreleased]` to `[X.Y.Z] – YYYY-MM-DD`, add a new empty `[Unreleased]`, update the
   compare links, commit, then `git tag -a vX.Y.Z -m "CarMaint X.Y.Z" && git push origin vX.Y.Z`.
-  The workflows publish the image (`X.Y.Z`, `X.Y`, `latest`) and the GitHub release.
+  The workflows publish the image (`X.Y.Z`, `X.Y`, `latest`) and the GitHub release; `scripts/release-status.sh vX.Y.Z`
+  waits for them and checks the result.
 - Pushes to `main` publish the `edge` image. Commit and push only when asked.

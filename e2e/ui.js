@@ -43,6 +43,14 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
   for (const [d, km, type, cost, c] of [[-400, 4000, 'service', 300, car], [-90, 10000, 'service', 250, car], [-60, 12000, 'fuel', 80, car], [-30, 15000, 'repair', 900, car], [-10, 18000, 'fuel', 70, car], [-20, 50000, 'tires', 600, car2], [-200, 45000, 'fuel', 60, car2]]) {
     await api(T, 'POST', rec('entries'), { car: c.id, type, date: iso(d), mileage: km, title: `${type} ${d}`, cost });
   }
+  // Refuels with litres for the Yaris, every 3 weeks at about 6.5 l/100 km: one partial refuel, one forgotten
+  // before #5 (implausible), the last without a mileage (no consumption)
+  for (let i = 0; i < 8; i++) {
+    const partial = i === 3;
+    const litres = partial ? 20 : Math.round((44 + (i % 3) * 1.5) * 100) / 100;
+    const mileage = i === 7 ? 0 : 45600 + i * 700 + (i >= 5 ? 700 : 0);
+    await api(T, 'POST', rec('entries'), { car: car2.id, type: 'fuel', date: iso(-180 + i * 22), mileage, title: 'Refuel', cost: Math.round(litres * 185) / 100, litres, partial });
+  }
   await api(T, 'POST', rec('reminders'), { car: car.id, title: 'Oil', type: 'service', intervalKm: 15000, dueKm: 19500, dueDate: iso(200) });
   await api(T, 'POST', rec('reminders'), { car: car.id, title: 'Tyres', type: 'tires', intervalMonths: 6, dueDate: iso(-2) });
   await api(T, 'POST', rec('reminders'), { car: car2.id, title: 'Oil', type: 'service', intervalMonths: 12, dueDate: iso(9) });
@@ -58,7 +66,16 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
   await page.evaluate((a) => localStorage.setItem('carmaint:auth', JSON.stringify(a)), { token: T, record: auth.record });
   await page.reload({ waitUntil: 'networkidle0' });
   const shot = async (name) => { await new Promise((r) => setTimeout(r, 400)); await page.screenshot({ path: `${OUT}/shots/${name}.png`, fullPage: true }); };
-  const go = async (hash, name) => { await page.evaluate((h) => { location.hash = h; }, hash); await shot(name); };
+  // Figures cut off with "…" (content wider than its box) – values must always show in full
+  const FIGURES = '.tile strong, .stats dd, .phone-stats strong, .fuel-figures strong, .entry-cost, .entry-km, .hero';
+  const clipped = () => page.evaluate((sel) => [...document.querySelectorAll(sel)]
+    .filter((el) => el.offsetParent && el.scrollWidth > el.clientWidth + 1).map((el) => el.innerText.replace(/\s+/g, ' ').trim()), FIGURES);
+  const go = async (hash, name) => {
+    await page.evaluate((h) => { location.hash = h; }, hash);
+    await shot(name);
+    const cut = await clipped();
+    if (cut.length) log(`CLIPPED on ${name}:`, cut.join(' | '));
+  };
   const text = (sel) => page.$eval(sel, (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => '(missing)');
 
   await go('#/', 'home');
@@ -84,6 +101,36 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
   log('notify preview on:', (await text('#notifyPreview')).replace(/^Next notification: \S+ \S+ /, ''));
   log('notify segments:', await page.evaluate(() => [...document.querySelectorAll('#notifyForm .segmented input:checked')].map((i) => `${i.name}=${i.value}`).join(' ')));
   await go('#/settings/display', 'settings-display');
+
+  // Refuels: consumption, a run folded into one line, the refuel filter, the fuel section of the costs
+  await go(`#/car/${car2.id}`, 'fuel-car');
+  log('fuel tiles:', await text('.tiles'));
+  log('fuel history:', await text('#entries'));
+  await page.evaluate(() => document.querySelector('[data-action="toggle-fuel-group"]').click());
+  await shot('fuel-group-open');
+  log('fuel group open:', await page.evaluate(() => document.querySelectorAll('#entries .entry.in-group').length), 'rows |', await text('#entries .in-group .entry-fuel'));
+  await page.evaluate(() => document.querySelector('[data-action="filter"][data-type="fuel"]').click());
+  log('fuel filter rows:', await page.evaluate(() => document.querySelectorAll('#entries .entry').length));
+  await page.evaluate(() => document.querySelector('[data-action="filter"][data-type="all"]').click());
+  await go(`#/costs/${car2.id}`, 'fuel-costs');
+  log('fuel card:', await text('.fuel-card'));
+  // Settings: km/l and cost per km with fuel, then back to the defaults
+  await go('#/settings/display', 'settings-display-fuel');
+  await page.evaluate(() => document.querySelector('[name="consumption"][value="kml"]').click());
+  await page.evaluate(() => document.querySelector('[name="perKm"][value="withFuel"]').click());
+  await new Promise((r) => setTimeout(r, 800));
+  await go(`#/car/${car2.id}`, 'fuel-car-kml');
+  log('fuel tiles km/l, with fuel:', await text('.tiles'));
+  await go('#/settings/display', 'settings-display-reset');
+  await page.evaluate(() => document.querySelector('[name="consumption"][value="l100"]').click());
+  await page.evaluate(() => document.querySelector('[name="perKm"][value="noFuel"]').click());
+  await new Promise((r) => setTimeout(r, 800));
+  // Entry dialog: choosing "Refuel" names the entry and shows litres and "full tank"
+  await go(`#/car/${car2.id}`, 'fuel-dialog');
+  await page.evaluate((id) => document.querySelector(`[data-action="add-entry"][data-id="${id}"]`).click(), car2.id);
+  await page.evaluate(() => document.querySelector('#typePills [value="fuel"]').click());
+  log('refuel dialog:', await page.evaluate(() => `title=${document.querySelector('#entryForm [name="title"]').value} fuelRow=${!document.querySelector('#fuelRow').hidden} full=${document.querySelector('#entryForm [name="full"]').checked}`));
+  await page.evaluate(() => document.querySelector('#entryDialog [data-close]').click());
 
   // Dialogs: add reminder, complete a reminder (entry dialog), add document with reminder
   await go(`#/car/${car.id}`, 'car2');
@@ -143,6 +190,8 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
   await page.setViewport({ width: 390, height: 844, isMobile: true });
   await go(`#/car/${car.id}`, 'phone-car');
   log('phone reminders:', await text('.rem-panel'));
+  await go(`#/car/${car2.id}`, 'phone-fuel');
+  log('phone fuel history:', await text('#entries'));
   await go('#/', 'phone-home');
 
   // Delete car (cascade)
