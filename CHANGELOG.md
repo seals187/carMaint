@@ -6,6 +6,23 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.3.0] – 2026-11-28
+
+### Added
+- Fuel consumption: refuels can record the litres and whether the tank was filled up ("Full tank", on by default),
+  in the entry dialog and in the quick entry on phones. Consumption is measured from one full tank to the next,
+  partial refuels in between included. The price per litre is calculated from cost and litres. Choosing the type
+  "Refuel" fills in the title (unless one was typed) and moves to the cost.
+- Car page: average consumption of the last 12 months as a key figure. History: refuels show consumption, litres
+  and price per litre, or why there is no consumption (no mileage).
+- Cost analysis of a car: a fuel section with the average consumption, fuel cost per km and one bar per full tank.
+- Implausible intervals (below 3 or above 25 l/100 km, far from the car's usual consumption, or mileages that run
+  backwards – usually a forgotten refuel or a typo) are marked and left out of the averages.
+- Setting *Consumption*: l/100 km or km/l. Litres and kilometres are always stored; the backup keeps litres,
+  "partial" and the setting. Refuels recorded before have no litres and count for the costs only.
+- Setting *Cost per km*: the figure on the overview, the car cards and the car page without fuel (as before) or
+  including fuel. The cost analysis keeps showing both.
+
 ## [0.2.11] – 2026-11-24
 
 ### Changed
@@ -224,7 +241,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.2.11...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/seals187/carMaint/compare/v0.2.11...v0.3.0
 [0.2.11]: https://github.com/seals187/carMaint/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/seals187/carMaint/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/seals187/carMaint/compare/v0.2.8...v0.2.9

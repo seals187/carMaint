@@ -33,7 +33,11 @@
   const CURRENCIES = { EUR: { locale: 'de-DE' }, CHF: { locale: 'de-CH' }, USD: { locale: 'en-US' } };
   // Vehicle data box and "due soon": always open, always closed or as last left
   const BOX_MODES = ['open', 'closed', 'remember'];
-  const DEFAULT_SETTINGS = { currency: 'EUR', infoBox: 'remember', infoCollapsed: false, dueBox: 'remember', dueCollapsed: false, language: 'de', templates: [] };
+  // Fuel consumption shown as litres per 100 km or km per litre (litres and km are stored)
+  const CONSUMPTION_UNITS = ['l100', 'kml'];
+  // Cost per km on the overview and the car page: without fuel (running costs) or with it
+  const PER_KM_MODES = ['noFuel', 'withFuel'];
+  const DEFAULT_SETTINGS = { currency: 'EUR', consumption: 'l100', perKm: 'noFuel', infoBox: 'remember', infoCollapsed: false, dueBox: 'remember', dueCollapsed: false, language: 'de', templates: [] };
 
   const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '');
 
@@ -44,6 +48,8 @@
     if (!CURRENCIES[s.currency]) s.currency = CURRENCIES[currency] ? currency : DEFAULT_SETTINGS.currency;
     if (!BOX_MODES.includes(s.infoBox)) s.infoBox = DEFAULT_SETTINGS.infoBox;
     if (!BOX_MODES.includes(s.dueBox)) s.dueBox = DEFAULT_SETTINGS.dueBox;
+    if (!CONSUMPTION_UNITS.includes(s.consumption)) s.consumption = DEFAULT_SETTINGS.consumption;
+    if (!PER_KM_MODES.includes(s.perKm)) s.perKm = DEFAULT_SETTINGS.perKm;
     if (!LANGUAGES[s.language]) s.language = LANGUAGES[language] ? language : 'en';
     if (!Array.isArray(s.templates)) s.templates = [];
     return s;
@@ -181,11 +187,12 @@
   }
   const perKm = (total, driven) => (driven >= MIN_KM_PER_KM ? total / driven : null);
 
-  // Running costs per km without fuel (overview and car page); null until enough km are known
-  function runningCostPerKm(cars, entries) {
+  // Costs per km for the overview and the car page, without fuel unless withFuel;
+  // null until enough km are known
+  function runningCostPerKm(cars, entries, withFuel = false) {
     const ids = new Set(cars.map((c) => c.id));
     const own = entries.filter((e) => ids.has(e.car));
-    return perKm(sumCosts(own.filter((e) => e.type !== 'fuel')), kmDriven(cars, own));
+    return perKm(sumCosts(withFuel ? own : own.filter((e) => e.type !== 'fuel')), kmDriven(cars, own));
   }
 
   // Parts of a bar: keys in their order, keyOf(entry) -> key (default: the cost type)
@@ -225,6 +232,7 @@
       prevTypes: costsByType(current ? prevSame : prevAll),
       projection: current && months < 12 ? avg * 12 : null,
       noFuel: total - types.fuel,
+      fuelPerKm: perKm(types.fuel, driven),
       buckets,
     };
   }
@@ -256,14 +264,88 @@
       }
       return b;
     });
-    return { first, firstYear, firstMonth, months, years, full, perYear, total, types, driven, perKm: perKm(total, driven), price, noFuel: total - types.fuel, buckets };
+    return { first, firstYear, firstMonth, months, years, full, perYear, total, types, driven, perKm: perKm(total, driven), fuelPerKm: perKm(types.fuel, driven), price, noFuel: total - types.fuel, buckets };
   }
 
+  /* ---------- Fuel consumption ---------- */
+
+  // Intervals outside this range (l/100 km) are typing errors or a forgotten refuel
+  const PLAUSIBLE_L100 = [3, 25];
+  // ... and so are intervals far from the car's own median (a forgotten refuel halves the
+  // value), once there are enough intervals to have one
+  const PLAUSIBLE_MEDIAN = [0.65, 1.6];
+  const MEDIAN_MIN = 3;
+  const CONSUMPTION_MONTHS = 12; // average on the car page
+
+  const litresOf = (e) => Number(e.litres) || 0;
+  const isFullTank = (e) => !e.partial;
+
+  // Intervals between full tanks of one car's refuels ({ id, type, date, mileage, litres,
+  // partial }), ordered by mileage. An interval runs from one full tank to the next and
+  // counts the litres of every refuel after the first, partial ones included.
+  //   { fromId, id, date, km, litres, l100, plausible } – id/date: the closing full tank
+  // Refuels without a mileage are left out. An interval with a refuel without litres
+  // in it is not measurable and skipped; one whose dates run backwards or whose value
+  // is outside PLAUSIBLE_L100 or PLAUSIBLE_MEDIAN is kept but not plausible (not
+  // counted in averages).
+  function consumptionIntervals(entries) {
+    const refuels = entries
+      .filter((e) => e.type === 'fuel' && e.mileage > 0)
+      .sort((a, b) => a.mileage - b.mileage || a.date.localeCompare(b.date));
+    const intervals = [];
+    let start = null;
+    let litres = 0;
+    let measurable = true;
+    let backwards = false;
+    for (const e of refuels) {
+      if (start) {
+        litres += litresOf(e);
+        if (!litresOf(e)) measurable = false;
+        if (e.date < start.date) backwards = true;
+      }
+      if (!isFullTank(e)) continue;
+      if (start && measurable && e.mileage > start.mileage) {
+        const km = e.mileage - start.mileage;
+        const l100 = litres / km * 100;
+        const plausible = !backwards && l100 >= PLAUSIBLE_L100[0] && l100 <= PLAUSIBLE_L100[1];
+        intervals.push({ fromId: start.id, id: e.id, date: e.date, km, litres, l100, plausible });
+      }
+      start = e;
+      litres = 0;
+      measurable = true;
+      backwards = false;
+    }
+    const values = intervals.filter((i) => i.plausible).map((i) => i.l100).sort((a, b) => a - b);
+    if (values.length >= MEDIAN_MIN) {
+      const mid = values.length >> 1;
+      const median = values.length % 2 ? values[mid] : (values[mid - 1] + values[mid]) / 2;
+      for (const i of intervals) {
+        if (i.l100 < median * PLAUSIBLE_MEDIAN[0] || i.l100 > median * PLAUSIBLE_MEDIAN[1]) i.plausible = false;
+      }
+    }
+    return intervals;
+  }
+
+  // Average l/100 km of the plausible intervals (weighted by km) that end on or after
+  // `since` (ISO date, '' = all); null without any.
+  function averageConsumption(intervals, since = '') {
+    const used = intervals.filter((i) => i.plausible && i.date >= since);
+    const km = used.reduce((n, i) => n + i.km, 0);
+    return km ? used.reduce((n, i) => n + i.litres, 0) / km * 100 : null;
+  }
+
+  // l/100 km in a unit ('l100' or 'kml')
+  const consumptionIn = (l100, unit) => (unit === 'kml' ? 100 / l100 : l100);
+
+  // Price per litre of a refuel; null without litres or cost
+  const pricePerLitre = (e) => (litresOf(e) && Number(e.cost) ? Number(e.cost) / litresOf(e) : null);
+
   return {
+    CONSUMPTION_UNITS, PLAUSIBLE_L100, CONSUMPTION_MONTHS, consumptionIntervals, averageConsumption, consumptionIn, pricePerLitre,
     isIsoDate, dayNumber, isoOfDay, daysBetween, addDays, addMonths,
     SOON_KM, SOON_DAYS, UPCOMING_KM, UPCOMING_DAYS, KM_PER_DAY_DEFAULT,
     kmPerDay, inspectionReminder, reminderStatus, weekColumn, MFK_INTERVAL_MONTHS, intervalOf, dueFrom, DOC_REMIND_DAYS, docReminderDate,
-    LANGUAGES, CURRENCIES, BOX_MODES, DEFAULT_SETTINGS, isEmail, userSettings, NOTIFY_BEFORE, NOTIFY_FREQUENCIES, NOTIFY_REPEATS, notifyOptions,
+    LANGUAGES, CURRENCIES, BOX_MODES, PER_KM_MODES, DEFAULT_SETTINGS, isEmail, userSettings, NOTIFY_BEFORE, NOTIFY_FREQUENCIES, NOTIFY_REPEATS, notifyOptions,
     COST_TYPES, costType, sumCosts, costsByType, monthTotals, kmDriven, runningCostPerKm, yearFigures, allYearsFigures,
   };
 });

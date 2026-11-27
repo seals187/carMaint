@@ -88,6 +88,9 @@ test('runningCostPerKm: without fuel, over the km known incl. the current mileag
   // car a: 1500 without fuel over 21000 - 10000 km
   assert.equal(core.runningCostPerKm([cars[0]], entries), 1500 / 11000);
   assert.equal(core.runningCostPerKm([cars[1]], entries), null); // no km known
+  assert.equal(core.runningCostPerKm([cars[0]], entries, true), 1700 / 11000);
+  assert.equal(core.userSettings({}).perKm, 'noFuel');
+  assert.equal(core.userSettings({ perKm: 'withFuel' }).perKm, 'withFuel');
 });
 
 test('kmDriven: current mileage only when asked', () => {
@@ -183,4 +186,53 @@ test('notifyOptions: defaults, allowed values, stages in ascending order', () =>
   assert.deepEqual(n.push, { enabled: true, url: 'ntfy://x/y' });
   assert.equal(core.isEmail('a@b.ch'), true);
   assert.equal(core.isEmail('a@b'), false);
+});
+
+const refuel = (id, date, mileage, litres, partial = false) => ({ id, type: 'fuel', date, mileage, litres, partial, cost: litres * 2 });
+
+test('consumptionIntervals: from full tank to full tank, partial refuels count', () => {
+  const list = core.consumptionIntervals([
+    refuel('a', '2026-01-01', 10000, 40),
+    refuel('b', '2026-01-10', 10300, 10, true),
+    refuel('c', '2026-01-20', 10800, 30),
+    { id: 'x', type: 'service', date: '2026-01-15', mileage: 10500 },
+  ]);
+  assert.equal(list.length, 1);
+  assert.deepEqual({ ...list[0], l100: Math.round(list[0].l100 * 10) / 10 },
+    { fromId: 'a', id: 'c', date: '2026-01-20', km: 800, litres: 40, l100: 5, plausible: true });
+});
+
+test('consumptionIntervals: missing litres, missing mileage, outliers and backwards dates', () => {
+  // Refuel without litres in between: not measurable; without mileage: left out
+  assert.equal(core.consumptionIntervals([refuel('a', '2026-01-01', 10000, 40), refuel('b', '2026-01-10', 10500, 0), refuel('c', '2026-01-20', 11000, 30)]).length, 1);
+  assert.equal(core.consumptionIntervals([refuel('a', '2026-01-01', 10000, 40), refuel('b', '2026-01-10', 0, 30)]).length, 0);
+  // Forgotten refuel: 1500 km on 40 l = 2.7 l/100 km
+  assert.equal(core.consumptionIntervals([refuel('a', '2026-01-01', 10000, 40), refuel('b', '2026-02-01', 11500, 40)])[0].plausible, false);
+  // Forgotten refuel of a frugal car: 3.3 l/100 km is in range, but half of its median
+  const steady = [0, 1, 2, 3].map((i) => refuel(`s${i}`, `2026-0${i + 1}-01`, 10000 + i * 600, 39));
+  const forgot = core.consumptionIntervals([...steady, refuel('f', '2026-06-01', 13000, 40)]);
+  assert.deepEqual(forgot.map((i) => i.plausible), [true, true, true, false]);
+  // Typo in the mileage: the later refuel sorts before the earlier one
+  assert.equal(core.consumptionIntervals([refuel('a', '2026-02-01', 10000, 40), refuel('b', '2026-01-01', 10600, 40)])[0].plausible, false);
+});
+
+test('averageConsumption: weighted by km, only plausible intervals since a day', () => {
+  const list = [
+    { date: '2025-06-01', km: 1000, litres: 50, plausible: true },
+    { date: '2026-06-01', km: 500, litres: 40, plausible: true },
+    { date: '2026-07-01', km: 500, litres: 20, plausible: true },
+    { date: '2026-08-01', km: 2000, litres: 20, plausible: false },
+  ];
+  assert.equal(core.averageConsumption(list, '2026-01-01'), 6);
+  assert.equal(Math.round(core.averageConsumption(list) * 100) / 100, 5.5);
+  assert.equal(core.averageConsumption([], ''), null);
+  assert.equal(core.consumptionIn(5, 'kml'), 20);
+  assert.equal(core.consumptionIn(5, 'l100'), 5);
+});
+
+test('pricePerLitre and the consumption setting', () => {
+  assert.equal(core.pricePerLitre({ cost: 90, litres: 45 }), 2);
+  assert.equal(core.pricePerLitre({ cost: 90, litres: 0 }), null);
+  assert.equal(core.userSettings({ consumption: 'mpg' }).consumption, 'l100');
+  assert.equal(core.userSettings({ consumption: 'kml' }).consumption, 'kml');
 });

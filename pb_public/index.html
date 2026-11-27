@@ -101,6 +101,10 @@
           <p class="hint" id="costHint"></p>
         </div>
       </div>
+      <div class="row fuel-row" id="fuelRow" hidden>
+        <div class="field"><label for="entryLitres" data-i18n="entry.litres"></label><input id="entryLitres" name="litres" type="number" min="0.01" step="0.01" inputmode="decimal"><p class="hint" id="litresHint"></p></div>
+        <label class="check fuel-full"><input type="checkbox" name="full"><span data-i18n="entry.fullTank"></span></label>
+      </div>
       <div class="field"><label for="entryShop" data-i18n="entry.shop"></label><input id="entryShop" name="shop" maxlength="200" data-i18n-placeholder="ph.shop"><p class="hint" id="recentShops"></p></div>
       <label class="field"><span data-i18n="entry.notes"></span><textarea name="notes" rows="2" maxlength="5000" data-i18n-placeholder="ph.notes"></textarea></label>
       <div class="remind-box" id="remindBox">
@@ -202,6 +206,10 @@
           <input id="quickKm" name="mileage" type="number" min="0" inputmode="numeric">
           <button type="button" class="btn ghost" data-step="1" aria-label="+100 km">+</button>
         </div>
+      </div>
+      <div class="row fuel-row" id="quickFuel" hidden>
+        <div class="field"><label for="quickLitres" data-i18n="entry.litres"></label><input id="quickLitres" name="litres" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+        <label class="check fuel-full"><input type="checkbox" name="full"><span data-i18n="entry.fullTank"></span></label>
       </div>
       <div class="field"><label for="quickCost" data-i18n="entry.cost"></label>
         <div class="affix lg"><span id="quickCurrency"></span><input id="quickCost" name="cost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>

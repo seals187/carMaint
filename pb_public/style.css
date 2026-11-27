@@ -1415,3 +1415,21 @@ dialog.sheet { width: min(460px, calc(100% - 32px)); }
   #printArea footer { margin-top: 16px; color: #777; font-size: 8pt; }
   @page { margin: 15mm; }
 }
+
+/* Refuels: litres and "full tank" in the entry dialog and the quick sheet; consumption */
+.row.fuel-row { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.row.fuel-row[hidden] { display: none; }
+.fuel-full { align-self: start; margin-top: 30px; white-space: nowrap; }
+.entry-main .entry-fuel { font-variant-numeric: tabular-nums; }
+.entry-fuel .warn { font-style: italic; }
+.tiles.four { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr); }
+.fuel-card .fuel-figures { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-bottom: 12px; }
+.fuel-card .fuel-figures span { display: block; font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.fuel-card .fuel-figures strong { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.fbars { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 2px; align-items: end; height: 140px; border-bottom: 1px solid var(--border); }
+.fbars > i { display: block; justify-self: center; width: 100%; max-width: 36px; min-height: 2px; border-radius: 4px 4px 0 0; background: var(--c-yellow); outline-offset: 2px; }
+.fbars > i:hover, .fbars > i:focus-visible { filter: brightness(1.12); }
+.favg { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--muted); pointer-events: none; }
+.favg b { position: absolute; right: 0; top: -18px; padding: 0 4px; font-size: .72rem; font-weight: 600; color: var(--muted); background: var(--surface); }
+.faxis { display: flex; justify-content: space-between; gap: 8px; padding-top: 6px; font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tile .tile-unit { font-size: .65em; font-weight: 600; color: var(--muted); }

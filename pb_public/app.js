@@ -4,8 +4,9 @@
 // Domain rules shared with the server come from core.js (CarMaint).
 const { daysBetween, UPCOMING_DAYS, kmPerDay, inspectionReminder, reminderStatus, weekColumn,
   intervalOf, dueFrom, DOC_REMIND_DAYS, docReminderDate,
-  CURRENCIES, BOX_MODES: INFO_MODES, DEFAULT_SETTINGS, isEmail, userSettings, NOTIFY_BEFORE, NOTIFY_FREQUENCIES, NOTIFY_REPEATS, notifyOptions: notifyOptionsOf,
-  COST_TYPES, sumCosts: sum, costsByType: byType, monthTotals, kmDriven, runningCostPerKm, yearFigures, allYearsFigures } = CarMaint;
+  CURRENCIES, BOX_MODES: INFO_MODES, PER_KM_MODES, DEFAULT_SETTINGS, isEmail, userSettings, NOTIFY_BEFORE, NOTIFY_FREQUENCIES, NOTIFY_REPEATS, notifyOptions: notifyOptionsOf,
+  COST_TYPES, sumCosts: sum, costsByType: byType, monthTotals, kmDriven, runningCostPerKm, yearFigures, allYearsFigures,
+  addMonths, CONSUMPTION_UNITS, CONSUMPTION_MONTHS, consumptionIntervals, averageConsumption, consumptionIn, pricePerLitre } = CarMaint;
 
 const THEME_KEY = 'carmaint:theme';
 const AUTH_KEY = 'carmaint:auth';
@@ -468,8 +469,15 @@ const carHue = (car) => CAR_HUES[[...car.id].reduce((h, c) => h + c.charCodeAt(0
 
 // The figures themselves are calculated in core.js.
 const costThisYear = (entries) => sum(entries.filter((e) => e.date.startsWith(thisYear())));
-// Running costs per km, without fuel; null until enough kilometres are known.
-const costPerKm = (cars) => runningCostPerKm(cars, db.entries);
+// Costs per km with or without fuel (setting "Cost per km"); null until enough km are known.
+const costPerKm = (cars) => runningCostPerKm(cars, db.entries, settings.perKm === 'withFuel');
+const perKmLabel = () => (settings.perKm === 'withFuel' ? t('stats.perKmFuel') : t('stats.perKmNoFuel'));
+// Fuel consumption of a car: intervals between full tanks, average of the last 12 months
+const consumptionOf = (carId) => consumptionIntervals(db.entries.filter((e) => e.car === carId));
+const recentConsumption = (carId) => averageConsumption(consumptionOf(carId), addMonths(today(), -CONSUMPTION_MONTHS));
+// l/100 km in the unit of the user's settings, e.g. "6.8 l/100 km" or "14.7 km/l"
+const fmtConsumption = (l100, unit = true) => (l100 == null ? '–'
+  : `${fmtNum(consumptionIn(l100, settings.consumption), 1)}${unit ? ` ${t(`unit.${settings.consumption}`)}` : ''}`);
 
 /* ---------- Reminders ---------- */
 
@@ -714,7 +722,7 @@ function renderHome() {
   const summary = [
     tn('count.cars', db.cars.length),
     `<a class="cost-link home-cost" href="#/costs" title="${t('costs.show')}">${t('home.yearSoFar', { year: thisYear(), amount: `<strong>${money.format(costThisYear(db.entries))}</strong>` })}${icon('chevronRight')}</a>`,
-    perKm !== null && t('home.perKm', { amount: money.format(perKm) }),
+    perKm !== null && (settings.perKm === 'withFuel' ? t('home.perKmFuel', { amount: money.format(perKm) }) : t('home.perKm', { amount: money.format(perKm) })),
   ].filter(Boolean).join(' · ');
   const due = allReminders().filter((s) => s.level !== 'later');
   $('#app').innerHTML = `
@@ -902,6 +910,10 @@ function displaySection() {
     allowed('currency') && settingRow(t('settings.currency'),
       `${t('settings.currencyHint')}<br><span id="currencyExample">${t('settings.example', { value: money.format(1234.5) })}</span>`,
       segmented('currency', t('settings.currency'), Object.fromEntries(Object.keys(CURRENCIES).map((c) => [c, c])))),
+    settingRow(t('settings.consumption'), t('settings.consumptionHint'),
+      segmented('consumption', t('settings.consumption'), CONSUMPTION_UNITS.map((u) => [u, t(`unit.${u}`)]))),
+    settingRow(t('settings.perKm'), t('settings.perKmHint'),
+      segmented('perKm', t('settings.perKm'), PER_KM_MODES.map((m) => [m, t(`perKm.${m}`)]))),
     allowed('infobox') && settingRow(t('settings.infoBox'), t('settings.infoBoxHint'), segmented('infoBox', t('settings.infoBox'), modes)),
     allowed('infobox') && settingRow(t('home.due'), t('settings.dueBoxHint'), segmented('dueBox', t('home.due'), modes)),
   ].filter(Boolean).join('')}</div>`;
@@ -1276,6 +1288,12 @@ document.addEventListener('change', (ev) => {
     saveSettings({ currency: value });
     $('#currencyExample').textContent = t('settings.example', { value: money.format(1234.5) });
     toast(t('toast.currency', { name: t(`currency.${value}`) }));
+  } else if (name === 'perKm' && PER_KM_MODES.includes(value)) {
+    saveSettings({ perKm: value });
+    toast(t('toast.perKm', { mode: t(`perKm.${value}`) }));
+  } else if (name === 'consumption' && CONSUMPTION_UNITS.includes(value)) {
+    saveSettings({ consumption: value });
+    toast(t('toast.consumption', { unit: t(`unit.${value}`) }));
   } else if (name === 'infoBox' && INFO_MODES.includes(value)) {
     saveSettings({ infoBox: value });
     infoCollapsed = defaultInfoCollapsed();
@@ -1325,7 +1343,7 @@ function carCard(car) {
         <dl class="stats">
           <div><dt>${t('stats.km')}</dt><dd>${car.mileage ? fmtNum(car.mileage) : '–'}</dd></div>
           <div class="cost-stat"><dt>${thisYear()} · ${esc(currencySymbol())}</dt><dd><a class="cost-link" href="#/costs/${esc(car.id)}" title="${t('costs.show')}">${fmtNum(Math.round(costThisYear(entries)))}</a></dd></div>
-          <div title="${t('stats.perKmNoFuel')}"><dt>${t('stats.perKm')}</dt><dd>${perKm === null ? '–' : fmtNum(perKm, 2)}</dd></div>
+          <div title="${perKmLabel()}"><dt>${t('stats.perKm')}</dt><dd>${perKm === null ? '–' : fmtNum(perKm, 2)}</dd></div>
         </dl>
         <div class="card-foot">${foot}</div>
       </div>
@@ -1341,6 +1359,7 @@ function renderCar(car) {
   const photos = car.photos;
   const id = esc(car.id);
   const perKm = costPerKm([car]);
+  const consumption = recentConsumption(car.id);
   const sub = [car.year, car.plate].filter(Boolean).map(esc).join(' · ');
   const tile = (label, value, extra = '', href = '') => (href
     ? `<a class="card tile tile-link" href="${href}" title="${t('costs.show')}"><div><span>${label}</span><strong>${value}</strong></div>${extra}</a>`
@@ -1378,10 +1397,11 @@ function renderCar(car) {
       </aside>
 
       <div class="car-main">
-        <div class="tiles">
+        <div class="tiles${consumption === null ? '' : ' four'}">
           ${tile(t('stats.km'), car.mileage ? fmtNum(car.mileage) : '–')}
           ${tile(t('tile.costYear', { year: thisYear() }), money0.format(costThisYear(entries)), costSpark(entries), `#/costs/${id}`)}
-          ${tile(t('stats.perKmNoFuel'), perKm === null ? '–' : fmtNum(perKm, 2))}
+          ${tile(perKmLabel(), perKm === null ? '–' : fmtNum(perKm, 2))}
+          ${consumption === null ? '' : tile(t('stats.consumption'), `${esc(fmtConsumption(consumption, false))} <small class="tile-unit">${t(`unit.${settings.consumption}`)}</small>`)}
         </div>
 
         <section class="rem-section${settings.remCollapsedPc ? ' collapsed' : ''}">
@@ -1450,6 +1470,7 @@ function renderCarPhone(car) {
   const photos = car.photos;
   const id = esc(car.id);
   const perKm = costPerKm([car]);
+  const consumption = recentConsumption(car.id);
   const sub = [car.year, car.plate].filter(Boolean).map(esc).join(' · ');
   const info = car.info ?? {};
   const fields = INFO_FIELDS.filter((f) => info[f.key] != null && info[f.key] !== '').length;
@@ -1487,7 +1508,8 @@ function renderCarPhone(car) {
         <div class="phone-stats">
           <div><span>${t('stats.km')}</span><strong>${car.mileage ? fmtNum(car.mileage) : '–'}</strong></div>
           <a href="#/costs/${id}" title="${t('costs.show')}"><span>${t('tile.costYear', { year: thisYear() })}</span><strong>${money0.format(costThisYear(entries))}</strong></a>
-          <div><span>${t('stats.perKmNoFuel')}</span><strong>${perKm === null ? '–' : fmtNum(perKm, 2)}</strong></div>
+          <div><span>${perKmLabel()}</span><strong>${perKm === null ? '–' : fmtNum(perKm, 2)}</strong></div>
+          ${consumption === null ? '' : `<div><span>${t('stats.consumption')}</span><strong>${esc(fmtConsumption(consumption))}</strong></div>`}
         </div>
       </div>
       ${photos[0] ? `
@@ -1689,7 +1711,39 @@ function costsYear(car, cars, entries, year) {
       </section>
       ${costTable(car, types, total, hasPrev ? fig.prevTypes : null, prevYear,
         current ? t('costs.footSame', { period: compare }) : t('costs.footYear', { year: prevYear }))}
-    </div>`;
+    </div>
+    ${car ? fuelCard(consumptionOf(car.id).filter((i) => i.date.startsWith(year)), types.fuel ? fig.fuelPerKm : null) : ''}`;
+}
+
+const FUEL_BARS = 24; // full tanks shown in the consumption chart
+
+// Fuel of one car in a period: average consumption, fuel cost per km and one bar per
+// full tank (the last FUEL_BARS); implausible intervals are left out and counted.
+function fuelCard(intervals, fuelPerKm) {
+  const plausible = intervals.filter((i) => i.plausible);
+  if (!plausible.length && fuelPerKm === null) return '';
+  const avg = averageConsumption(intervals);
+  const shown = plausible.slice(-FUEL_BARS);
+  const unit = (l100) => consumptionIn(l100, settings.consumption);
+  const max = Math.max(...shown.map((i) => unit(i.l100))) * 1.15;
+  const label = (i) => `${fmtDateNum(i.date)}: ${fmtConsumption(i.l100)} · ${km(i.km)} · ${fmtNum(i.litres, 2)} l`;
+  const skipped = intervals.length - plausible.length;
+  const figure = (name, value) => `<div><span>${name}</span><strong>${value}</strong></div>`;
+  return `
+    <section class="card costs-card fuel-card">
+      <div class="costs-card-head"><h2>${t('fuel.title')}</h2>${skipped ? `<span class="muted small">${esc(tn('fuel.skipped', skipped))}</span>` : ''}</div>
+      <div class="fuel-figures">
+        ${figure(t('stats.consumption'), esc(fmtConsumption(avg)))}
+        ${figure(t('fuel.perKm'), fuelPerKm === null ? '–' : money.format(fuelPerKm))}
+        ${figure(t('fuel.fullTanks'), plausible.length)}
+      </div>
+      ${shown.length ? `
+        <div class="fbars" style="--n:${shown.length}" role="img" aria-label="${esc(t('fuel.chartAria', { unit: t(`unit.${settings.consumption}`) }))}">
+          ${shown.map((i) => `<i tabindex="0" style="height:${unit(i.l100) / max * 100}%" title="${esc(label(i))}" aria-label="${esc(label(i))}"></i>`).join('')}
+          ${avg === null ? '' : `<span class="favg" style="bottom:${unit(avg) / max * 100}%"><b>Ø ${esc(fmtConsumption(avg, false))}</b></span>`}
+        </div>
+        <div class="faxis"><span>${fmtDateNum(shown[0].date)}</span><span>${fmtDateNum(shown.at(-1).date)}</span></div>` : ''}
+    </section>`;
 }
 
 // All years: totals since purchase, average per full year, bars per year
@@ -1727,7 +1781,8 @@ function costsAllYears(car, cars, entries) {
       <div class="costs-card-head"><h2>${t('costs.perYearChart')}</h2>${note}</div>
       ${costChart(buckets, { year: true })}
       <ul class="costs-legend">${series.map((s) => `<li><span class="dot" ${s.attr}></span>${esc(s.label)}</li>`).join('')}</ul>
-    </section>`;
+    </section>
+    ${car ? fuelCard(consumptionOf(car.id), types.fuel ? fig.fuelPerKm : null) : ''}`;
 }
 
 // "Where does the money go?": one bar with the share of every type, largest first
@@ -2009,7 +2064,8 @@ function renderEntries(car) {
   } else if (!list.length) {
     html = `<p class="muted center">${t('entries.noMatch')}</p>`;
   } else {
-    html = `<ul class="history">${list.map(entryItem).join('')}</ul>`;
+    const closing = new Map(consumptionOf(car.id).map((i) => [i.id, i]));
+    html = `<ul class="history">${list.map((e) => entryItem(e, closing)).join('')}</ul>`;
   }
   $('#entries').innerHTML = html;
   hydrate();
@@ -2023,24 +2079,39 @@ function fileChip(entry, name) {
     <span class="file-ext" data-ext="${esc(ext)}">${esc(ext)}</span><span class="file-name">${esc(label)}</span></button>`;
 }
 
+// Refuel details: "6.8 l/100 km · 42.5 l · CHF 1.89 /l" (consumption when this full tank
+// closes an interval, or why there is none – first, so narrow rows keep it).
+// closing: interval by closing entry id.
+function refuelLine(e, closing) {
+  if (e.type !== 'fuel' || !e.litres) return '';
+  const ppl = pricePerLitre(e);
+  const interval = closing.get(e.id);
+  const state = interval?.plausible ? esc(fmtConsumption(interval.l100))
+    : interval ? `<span class="warn" title="${esc(t('fuel.implausibleHint'))}">${esc(t('fuel.implausible', { value: fmtConsumption(interval.l100) }))}</span>`
+    : !e.mileage ? `<span class="warn">${esc(t('fuel.noMileage'))}</span>` : '';
+  const parts = [`${fmtNum(e.litres, 2)} l`, ppl && `${money.format(ppl)} /l`, e.partial && t('fuel.partial')].filter(Boolean).map(esc);
+  return `<span class="muted entry-fuel">${[state, ...parts].filter(Boolean).join(' · ')}</span>`;
+}
+
 // Compact row with the receipts; a click shows the notes and the actions.
-function entryItem(e) {
+function entryItem(e, closing) {
   const color = (TYPES[e.type] ?? TYPES.other).color;
   const id = esc(e.id);
   const open = openEntries.has(e.id);
   const files = e.attachments.length;
+  const fuel = refuelLine(e, closing);
   const meta = [typeLabel(e.type), e.shop].filter(Boolean).map(esc).join(' · ');
   const date = fmtDateNum(e.date);
   return `
     <li class="entry${open ? ' open' : ''}" id="entry-${id}" data-color="${color}">
       ${isPhone() ? `
       <button class="entry-line compact" data-action="toggle-entry" data-id="${id}" aria-expanded="${open}">
-        <span class="entry-main"><strong><span class="entry-type">${typeIcon(e.type)}</span>${esc(e.title)}</strong><span class="muted entry-sub"><span class="entry-sub-text"><time datetime="${esc(e.date)}">${date}</time> · ${meta}${e.mileage ? ` · <span class="nowrap">${km(e.mileage)}</span>` : ''}</span>${files ? `<span class="entry-clip" data-action="view-file" data-id="${id}" data-file="${esc(e.attachments[0])}" title="${esc(t('att.view', { name: attachmentLabel(e, e.attachments[0]) }))}">${icon('paperclip')}${files > 1 ? files : ''}</span>` : ''}</span></span>
+        <span class="entry-main"><strong><span class="entry-type">${typeIcon(e.type)}</span>${esc(e.title)}</strong><span class="muted entry-sub"><span class="entry-sub-text"><time datetime="${esc(e.date)}">${date}</time> · ${meta}${e.mileage ? ` · <span class="nowrap">${km(e.mileage)}</span>` : ''}</span>${files ? `<span class="entry-clip" data-action="view-file" data-id="${id}" data-file="${esc(e.attachments[0])}" title="${esc(t('att.view', { name: attachmentLabel(e, e.attachments[0]) }))}">${icon('paperclip')}${files > 1 ? files : ''}</span>` : ''}</span>${fuel}</span>
         <span class="entry-cost">${e.cost ? money.format(e.cost) : ''}</span>
       </button>` : `
       <button class="entry-line" data-action="toggle-entry" data-id="${id}" aria-expanded="${open}">
         <time datetime="${esc(e.date)}">${date}</time>
-        <span class="entry-main"><strong><span class="entry-type">${typeIcon(e.type)}</span>${esc(e.title)}</strong><span class="muted">${meta}${files ? ` · <span class="nowrap">${icon('paperclip')} ${files}</span>` : ''}</span></span>
+        <span class="entry-main"><strong><span class="entry-type">${typeIcon(e.type)}</span>${esc(e.title)}</strong><span class="muted">${meta}${files ? ` · <span class="nowrap">${icon('paperclip')} ${files}</span>` : ''}</span>${fuel}</span>
         <span class="entry-km muted">${e.mileage ? km(e.mileage) : ''}</span>
         <span class="entry-cost">${e.cost ? money.format(e.cost) : ''}</span>
       </button>`}
@@ -2251,6 +2322,8 @@ function openEntryDialog(entry, reminder = null) {
   f.namedItem('date').value = entry.date ?? today();
   f.namedItem('mileage').value = entry.mileage || car.mileage || '';
   f.namedItem('cost').value = entry.cost || '';
+  f.namedItem('litres').value = entry.litres || '';
+  f.namedItem('full').checked = !entry.partial;
   for (const key of ['title', 'shop', 'notes']) f.namedItem(key).value = entry[key] ?? '';
   $('#currencySymbol').textContent = currencySymbol();
   entryFiles.open(entry);
@@ -2354,6 +2427,14 @@ function updateEntryHints() {
     || others.find((e) => e.cost && e.type === f.namedItem('type').value);
   $('#costHint').textContent = lastCost ? t('hint.lastCost', { amount: money.format(lastCost.cost) }) : '';
 
+  // Refuels: litres and full tank; price per litre, or why there will be no consumption
+  const fuel = f.namedItem('type').value === 'fuel';
+  $('#fuelRow').hidden = !fuel;
+  const ppl = pricePerLitre({ cost: f.namedItem('cost').value, litres: f.namedItem('litres').value });
+  $('#litresHint').textContent = !fuel || !Number(f.namedItem('litres').value) ? ''
+    : !mileage ? t('fuel.noMileage')
+    : ppl ? `${money.format(ppl)} /l` : '';
+
   const on = f.namedItem('remind').checked;
   const kmNext = num(f.namedItem('remindKm').value);
   const months = num(f.namedItem('remindMonths').value);
@@ -2369,12 +2450,31 @@ entryForm.addEventListener('input', (ev) => {
   if (ev.target.name === 'title') renderTemplates();
   updateEntryHints();
 });
-entryForm.addEventListener('change', updateEntryHints);
+entryForm.addEventListener('change', (ev) => {
+  // Choosing "Refuel" names the entry, so only cost and litres are left to fill in;
+  // a title typed by hand is kept, the automatic one goes again with another type.
+  if (ev.target.name === 'type') {
+    const title = entryForm.elements.namedItem('title');
+    const auto = t('tpl.fuel');
+    if (ev.target.value === 'fuel' && !title.value.trim()) {
+      title.value = auto;
+      $('#entryCost').focus();
+    } else if (ev.target.value !== 'fuel' && title.value === auto) {
+      title.value = '';
+    }
+  }
+  updateEntryHints();
+});
 
 $('#todayBtn').addEventListener('click', () => {
   entryForm.elements.namedItem('date').value = today();
   updateEntryHints();
 });
+
+// Litres and full tank from a form (entry dialog, quick sheet); cleared for other types
+const refuelFields = (f) => (f.type === 'fuel'
+  ? { litres: Number(f.litres) > 0 ? Number(f.litres) : null, partial: !f.full }
+  : { litres: null, partial: false });
 
 async function bumpMileage(car, mileage) {
   if (mileage && mileage > (car.mileage || 0)) {
@@ -2434,7 +2534,8 @@ async function syncDocReminder(doc, remind) {
 // "Save & add another": keep car, date, mileage and workshop, clear the rest.
 function resetForNext() {
   const f = entryForm.elements;
-  for (const key of ['title', 'cost', 'notes']) f.namedItem(key).value = '';
+  for (const key of ['title', 'cost', 'litres', 'notes']) f.namedItem(key).value = '';
+  f.namedItem('full').checked = true;
   entryFiles.reset();
   completing = null;
   renderTemplates();
@@ -2456,6 +2557,7 @@ entryForm.addEventListener('submit', (ev) => {
       cost: num(f.cost),
       shop: f.shop.trim(),
       notes: f.notes.trim(),
+      ...refuelFields(f),
     };
     const entry = await entryFiles.save((fields) =>
       store.save('entries', existing ? { ...data, ...fields } : { ...data, car: f.car }, existing?.id));
@@ -2682,6 +2784,8 @@ function openQuickDialog(carId) {
     : `<input type="hidden" name="car" value="${esc(selected.id)}">`;
   quickForm.elements.namedItem('type').value = 'service';
   quickForm.elements.namedItem('mileage').value = selected.mileage || '';
+  quickForm.elements.namedItem('full').checked = true;
+  $('#quickFuel').hidden = true;
   $('#quickCurrency').textContent = currencySymbol();
   setQuickPhoto(null);
   showDialog(quickDialog);
@@ -2695,6 +2799,7 @@ function setQuickPhoto(file) {
 
 quickForm.addEventListener('change', (ev) => {
   if (ev.target.name === 'car') quickForm.elements.namedItem('mileage').value = carById(ev.target.value)?.mileage || '';
+  if (ev.target.name === 'type') $('#quickFuel').hidden = ev.target.value !== 'fuel';
   if (ev.target.id === 'quickPhoto' && ev.target.files[0]) {
     try {
       checkFileType(ev.target.files[0], serverConfig.fileTypes.attachments);
@@ -2725,6 +2830,7 @@ quickForm.addEventListener('submit', (ev) => {
       mileage: num(f.mileage),
       title: f.type === 'fuel' ? t('tpl.fuel') : typeLabel(f.type),
       cost: num(f.cost),
+      ...refuelFields(f),
     });
     if (quickPhoto) entry = await uploadAttachments(entry, [await prepareFile(quickPhoto, ATTACHMENT_MAX, serverConfig.fileTypes.attachments)]);
     await bumpMileage(car, entry.mileage);
@@ -3286,7 +3392,7 @@ async function exportBackup() {
     for (const name of e.attachments) attachments.push(await addFile(recordFile(e, name), attachmentLabel(e, name)));
     entries.push({
       id: e.id, carId: e.car, type: e.type, date: e.date, mileage: e.mileage || null, title: e.title,
-      cost: e.cost || null, shop: e.shop, notes: e.notes, attachments,
+      cost: e.cost || null, shop: e.shop, notes: e.notes, litres: e.litres || null, partial: !!e.partial, attachments,
     });
   }
 
@@ -3363,6 +3469,9 @@ async function importBackup(data) {
         cost: num(e.cost),
         shop: str(e.shop),
         notes: str(e.notes),
+        // Litres and partial refuels exist since 0.3
+        litres: e.type === 'fuel' && Number(e.litres) > 0 ? Number(e.litres) : null,
+        partial: e.type === 'fuel' && e.partial === true,
       });
       const atts = await filesOf(e.attachments, (a) => fileOf(a?.id, a?.name, serverConfig.fileTypes.attachments));
       if (atts.length) await uploadAttachments(entry, atts);
@@ -3404,6 +3513,8 @@ async function importBackup(data) {
   // Only remove the previous vehicles after a successful import.
   for (const id of oldCars) await store.remove('cars', id).catch(() => {});
   if (CURRENCIES[data.settings?.currency]) await saveSettings({ currency: data.settings.currency });
+  if (CONSUMPTION_UNITS.includes(data.settings?.consumption)) await saveSettings({ consumption: data.settings.consumption });
+  if (PER_KM_MODES.includes(data.settings?.perKm)) await saveSettings({ perKm: data.settings.perKm });
   forgetFiles();
   await store.load();
   await moveLegacyDocuments(); // backups from before 0.2
