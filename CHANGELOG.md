@@ -6,6 +6,12 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.3.1] – 2026-11-28
+
+### Changed
+- History: refuels in a row fold into one line in "All" ("5 refuels", period, consumption, total); a click lists
+  them. The "Refuel" filter still shows every refuel on its own.
+
 ## [0.3.0] – 2026-11-28
 
 ### Added
@@ -241,7 +247,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/seals187/carMaint/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/seals187/carMaint/compare/v0.2.11...v0.3.0
 [0.2.11]: https://github.com/seals187/carMaint/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/seals187/carMaint/compare/v0.2.9...v0.2.10

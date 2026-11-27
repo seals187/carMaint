@@ -663,6 +663,7 @@ let infoCollapsed = false;
 let dueCollapsed = false;
 let lastPage = null;
 const openEntries = new Set(); // expanded rows in the history
+const openGroups = new Set(); // expanded runs of refuels in the history (key: newest refuel)
 // Phones get their own car page; switch layouts when the width crosses the limit
 const phoneQuery = matchMedia('(max-width: 640px)');
 const isPhone = () => phoneQuery.matches;
@@ -2065,10 +2066,51 @@ function renderEntries(car) {
     html = `<p class="muted center">${t('entries.noMatch')}</p>`;
   } else {
     const closing = new Map(consumptionOf(car.id).map((i) => [i.id, i]));
-    html = `<ul class="history">${list.map((e) => entryItem(e, closing)).join('')}</ul>`;
+    // "All": refuels in a row fold into one line; the "Refuel" filter lists each one
+    const rows = filter.type === 'all' ? refuelRuns(list) : list;
+    html = `<ul class="history">${rows.map((r) => (Array.isArray(r) ? fuelGroup(r, closing) : entryItem(r, closing))).join('')}</ul>`;
   }
   $('#entries').innerHTML = html;
   hydrate();
+}
+
+// Consecutive refuels (at least two, nothing else in between) as one array; other entries stay
+function refuelRuns(list) {
+  const rows = [];
+  for (const e of list) {
+    const last = rows.at(-1);
+    if (e.type === 'fuel' && last?.type === 'fuel') rows[rows.length - 1] = [last, e];
+    else if (e.type === 'fuel' && Array.isArray(last) && last[0].type === 'fuel') last.push(e);
+    else rows.push(e);
+  }
+  return rows;
+}
+
+// One line for refuels in a row: "5 refuels · 12.09.–14.11.2026 · 6.5 l/100 km · CHF 392".
+// A click lists them; a group with an expanded entry (e.g. from the search) is open.
+// The key is the newest refuel, so a new refuel starts the group closed again.
+function fuelGroup(run, closing) {
+  const key = run[0].id;
+  const open = openGroups.has(key) || run.some((e) => openEntries.has(e.id));
+  const range = `${fmtDateShort(run.at(-1).date)}–${fmtDateShort(run[0].date)}`;
+  const avg = averageConsumption(run.map((e) => closing.get(e.id)).filter(Boolean));
+  const sub = [range, avg !== null && fmtConsumption(avg)].filter(Boolean).map(esc).join(' · ');
+  const total = sum(run);
+  const head = `<strong><span class="entry-type">${typeIcon('fuel')}</span>${esc(tn('fuel.group', run.length))}${icon('chevronDown')}</strong>`;
+  return `
+    <li class="entry fuel-group${open ? ' expanded' : ''}" data-color="${TYPES.fuel.color}">
+      ${isPhone() ? `
+      <button class="entry-line compact" data-action="toggle-fuel-group" data-key="${esc(key)}" aria-expanded="${open}">
+        <span class="entry-main">${head}<span class="muted entry-sub"><span class="entry-sub-text">${sub}</span></span></span>
+        <span class="entry-cost">${total ? money.format(total) : ''}</span>
+      </button>` : `
+      <button class="entry-line" data-action="toggle-fuel-group" data-key="${esc(key)}" aria-expanded="${open}">
+        <time datetime="${esc(run[0].date)}">${fmtDateNum(run[0].date)}</time>
+        <span class="entry-main">${head}<span class="muted">${sub}</span></span>
+        <span class="entry-km muted">${run[0].mileage ? km(run[0].mileage) : ''}</span>
+        <span class="entry-cost">${total ? money.format(total) : ''}</span>
+      </button>`}
+    </li>${open ? run.map((e) => entryItem(e, closing, key)).join('') : ''}`;
 }
 
 // Receipt as a chip: "PDF Rechnung_Garage_Meier.pdf"
@@ -2094,7 +2136,8 @@ function refuelLine(e, closing) {
 }
 
 // Compact row with the receipts; a click shows the notes and the actions.
-function entryItem(e, closing) {
+// group: key of the run of refuels the row is listed in (indented below it)
+function entryItem(e, closing, group = '') {
   const color = (TYPES[e.type] ?? TYPES.other).color;
   const id = esc(e.id);
   const open = openEntries.has(e.id);
@@ -2103,7 +2146,7 @@ function entryItem(e, closing) {
   const meta = [typeLabel(e.type), e.shop].filter(Boolean).map(esc).join(' · ');
   const date = fmtDateNum(e.date);
   return `
-    <li class="entry${open ? ' open' : ''}" id="entry-${id}" data-color="${color}">
+    <li class="entry${open ? ' open' : ''}${group ? ' in-group' : ''}" id="entry-${id}" data-color="${color}"${group ? ` data-group="${esc(group)}"` : ''}>
       ${isPhone() ? `
       <button class="entry-line compact" data-action="toggle-entry" data-id="${id}" aria-expanded="${open}">
         <span class="entry-main"><strong><span class="entry-type">${typeIcon(e.type)}</span>${esc(e.title)}</strong><span class="muted entry-sub"><span class="entry-sub-text"><time datetime="${esc(e.date)}">${date}</time> · ${meta}${e.mileage ? ` · <span class="nowrap">${km(e.mileage)}</span>` : ''}</span>${files ? `<span class="entry-clip" data-action="view-file" data-id="${id}" data-file="${esc(e.attachments[0])}" title="${esc(t('att.view', { name: attachmentLabel(e, e.attachments[0]) }))}">${icon('paperclip')}${files > 1 ? files : ''}</span>` : ''}</span>${fuel}</span>
@@ -3259,6 +3302,17 @@ document.addEventListener('click', (ev) => {
       renderEntries(carById(currentCarId));
       $(`#entry-${CSS.escape(id)} .entry-line`)?.focus();
       break;
+    case 'toggle-fuel-group': {
+      const key = el.dataset.key;
+      if (openGroups.has(key)) {
+        openGroups.delete(key);
+        // Folding also closes the refuels opened inside it
+        document.querySelectorAll(`#entries .entry[data-group="${CSS.escape(key)}"]`).forEach((li) => openEntries.delete(li.id.slice(6)));
+      } else openGroups.add(key);
+      renderEntries(carById(currentCarId));
+      $(`[data-action="toggle-fuel-group"][data-key="${CSS.escape(key)}"]`)?.focus();
+      break;
+    }
     case 'toggle-due-group': {
       const key = el.dataset.key;
       if (collapsedDue.has(key)) collapsedDue.delete(key);

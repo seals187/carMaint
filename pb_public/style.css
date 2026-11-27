@@ -1433,3 +1433,9 @@ dialog.sheet { width: min(460px, calc(100% - 32px)); }
 .favg b { position: absolute; right: 0; top: -18px; padding: 0 4px; font-size: .72rem; font-weight: 600; color: var(--muted); background: var(--surface); }
 .faxis { display: flex; justify-content: space-between; gap: 8px; padding-top: 6px; font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .tile .tile-unit { font-size: .65em; font-weight: 600; color: var(--muted); }
+/* Refuels in a row: one line in "All", the refuels indented below it when open */
+.fuel-group strong > .ic { width: 16px; height: 16px; margin-left: 6px; vertical-align: -3px; color: var(--muted); transition: transform .15s; }
+.fuel-group [aria-expanded="false"] strong > .ic { transform: rotate(-90deg); }
+.entry.in-group:not(.open) { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
+.entry.in-group:not(.open) .entry-line { padding-left: 38px; }
+.entry.in-group:not(.open) .entry-line::before { left: 16px; }
