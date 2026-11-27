@@ -21,6 +21,7 @@ const TYPES = {
   inspection: { color: 'green', icon: 'clipboardCheck' },
   tires:      { color: 'purple', icon: 'tire' },
   fuel:       { color: 'yellow', icon: 'fuel' },
+  fixed:      { color: 'teal', icon: 'shield' },
   documents:  { color: 'teal', icon: 'file' },
   other:      { color: 'gray', icon: 'tag' },
 };
@@ -37,6 +38,9 @@ const TEMPLATES = [
   { key: 'inspection', type: 'inspection', months: 24 },
   { key: 'fuel', type: 'fuel' },
   { key: 'wipers', type: 'repair' },
+  { key: 'insurance', type: 'fixed' },
+  { key: 'roadTax', type: 'fixed' },
+  { key: 'vignette', type: 'fixed', months: 12 },
 ];
 
 const QUICK_KM_STEP = 100;
@@ -76,6 +80,7 @@ const ICONS = {
   hammer: '<path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5"/>',
   clipboardCheck: '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
   tire: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><path d="M12 9V2"/><path d="m14.85 11.07 6.65-2.17"/><path d="m13.76 14.43 4.14 5.67"/><path d="m10.24 14.43-4.14 5.67"/><path d="M9.15 11.07 2.5 8.9"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
   tag: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>',
   chevronLeft:'<path d="m15 18-6-6 6-6"/>',
   chevronRight: '<path d="m9 18 6-6-6-6"/>',

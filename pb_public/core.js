@@ -166,7 +166,9 @@
 
   // Entries: { car, type, date, mileage, cost }; cars: { id, mileage, info }.
   // Stack order of the charts (neighbouring colours stay apart for colour-blind readers)
-  const COST_TYPES = ['fuel', 'service', 'inspection', 'tires', 'repair', 'other'];
+  const COST_TYPES = ['fuel', 'service', 'inspection', 'tires', 'fixed', 'repair', 'other'];
+  // Fixed costs (insurance, road tax, vignette) are paid once a year: a month full of them is expected
+  const EXPECTED_PEAKS = ['fixed'];
   const MIN_KM_PER_KM = 100; // cost per km only once this many km are known
   const costType = (e) => (COST_TYPES.includes(e.type) ? e.type : 'other');
   const sumCosts = (list) => list.reduce((total, e) => total + (Number(e.cost) || 0), 0);
@@ -203,7 +205,7 @@
   // One year (costed entries of the cars). Compared with the same months of the year before
   // while the year is running. Buckets: one per month with parts, the previous year's
   // value (prev), future (not reached yet) and top (key of a part that makes the month
-  // an outlier: at least twice the average and 60 % of the month).
+  // an outlier: at least twice the average and 60 % of the month; never EXPECTED_PEAKS).
   function yearFigures({ entries, cars, year, today, keys = COST_TYPES, keyOf = costType }) {
     const current = year === today.slice(0, 4);
     const months = current ? Number(today.slice(5, 7)) : 12;
@@ -222,7 +224,7 @@
       const b = { month: i + 1, total: sumCosts(list), parts, future: i + 1 > months };
       if (prevAll.length) b.prev = prevMonths[i];
       const top = parts.reduce((a, p) => (p.value > (a ? a.value : 0) ? p : a), null);
-      if (top && b.total >= 2 * avg && top.value / b.total >= 0.6) b.top = top.key;
+      if (top && !EXPECTED_PEAKS.includes(top.key) && b.total >= 2 * avg && top.value / b.total >= 0.6) b.top = top.key;
       return b;
     });
     return {

@@ -236,3 +236,13 @@ test('pricePerLitre and the consumption setting', () => {
   assert.equal(core.userSettings({ consumption: 'mpg' }).consumption, 'l100');
   assert.equal(core.userSettings({ consumption: 'kml' }).consumption, 'kml');
 });
+
+test('yearFigures: a month of fixed costs is no outlier, but counts like any cost', () => {
+  const list = [e('2026-01-10', 'fixed', 1200, 0), e('2026-03-01', 'service', 100, 0), e('2026-05-01', 'repair', 1000, 0)];
+  const f = core.yearFigures({ entries: list, cars: [cars[0]], year: '2026', today: '2026-06-15' });
+  assert.equal(f.types.fixed, 1200);
+  assert.equal(f.noFuel, 2300);
+  assert.equal(f.buckets[0].top, undefined); // January: all insurance, expected
+  assert.equal(f.buckets[4].top, 'repair');
+  assert.equal(core.costType({ type: 'fixed' }), 'fixed');
+});

@@ -6,6 +6,14 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.4.0] – 2026-11-28
+
+### Added
+- Entry type *Fixed costs* for insurance, road tax, the motorway vignette and other costs of owning a car, with
+  templates (the vignette suggests a reminder after 12 months). Fixed costs count in the totals and in the cost
+  per km, get their own share in the cost analysis, and a month full of them is not marked as an outlier.
+  Entries recorded as "Other" so far stay as they are and can be switched by editing them.
+
 ## [0.3.1] – 2026-11-28
 
 ### Changed
@@ -247,7 +255,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/seals187/carMaint/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/seals187/carMaint/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/seals187/carMaint/compare/v0.2.11...v0.3.0
 [0.2.11]: https://github.com/seals187/carMaint/compare/v0.2.10...v0.2.11

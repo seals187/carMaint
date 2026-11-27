@@ -51,6 +51,9 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
     const mileage = i === 7 ? 0 : 45600 + i * 700 + (i >= 5 ? 700 : 0);
     await api(T, 'POST', rec('entries'), { car: car2.id, type: 'fuel', date: iso(-180 + i * 22), mileage, title: 'Refuel', cost: Math.round(litres * 185) / 100, litres, partial });
   }
+  // Fixed costs (since 0.4): the yearly insurance, not marked as an outlier month
+  await api(T, 'POST', rec('entries'), { car: car.id, type: 'fixed', date: iso(-45), title: 'Insurance', cost: 1100 })
+    .catch((err) => log('fixed cost seed failed:', err.message.slice(0, 60)));
   await api(T, 'POST', rec('reminders'), { car: car.id, title: 'Oil', type: 'service', intervalKm: 15000, dueKm: 19500, dueDate: iso(200) });
   await api(T, 'POST', rec('reminders'), { car: car.id, title: 'Tyres', type: 'tires', intervalMonths: 6, dueDate: iso(-2) });
   await api(T, 'POST', rec('reminders'), { car: car2.id, title: 'Oil', type: 'service', intervalMonths: 12, dueDate: iso(9) });
@@ -86,6 +89,11 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
   log('car reminders:', await text('.rem-panel'));
   await go(`#/costs/${car.id}`, 'costs-car');
   log('costs car tiles:', await text('.costs-tiles'));
+  log('costs car mix:', await text('.costs-mix'));
+  await page.evaluate(() => document.querySelector('[name="costMode"][value="total"]')?.click());
+  await new Promise((r) => setTimeout(r, 300));
+  log('costs car outliers:', await page.evaluate(() => [...document.querySelectorAll('.ccol.hi')].map((c) => c.getAttribute('aria-label')).join(' | ') || 'none'));
+  await page.evaluate(() => document.querySelector('[name="costMode"][value="type"]')?.click());
   await go('#/costs', 'costs-all');
   log('costs all tiles:', await text('.costs-tiles'));
   await page.evaluate(() => { document.querySelector('[name="costYear"][value="all"]')?.click(); });
@@ -129,6 +137,7 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
   await go(`#/car/${car2.id}`, 'fuel-dialog');
   await page.evaluate((id) => document.querySelector(`[data-action="add-entry"][data-id="${id}"]`).click(), car2.id);
   await page.evaluate(() => document.querySelector('#typePills [value="fuel"]').click());
+  log('templates:', await text('#tplChips'));
   log('refuel dialog:', await page.evaluate(() => `title=${document.querySelector('#entryForm [name="title"]').value} fuelRow=${!document.querySelector('#fuelRow').hidden} full=${document.querySelector('#entryForm [name="full"]').checked}`));
   await page.evaluate(() => document.querySelector('#entryDialog [data-close]').click());
 

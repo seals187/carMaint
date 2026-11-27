@@ -2,6 +2,12 @@
 
 A personal maintenance log for vehicles: what was done to a car, when, at what mileage and at what cost.
 
+## Costs
+
+**Fixed cost** (UI: "Fixkosten"):
+An entry for a cost of owning a car that does not depend on driving or repairs, such as insurance, road tax or the motorway vignette; booked on the day it was paid.
+_Avoid_: Insurance entry, recurring cost, overhead
+
 ## Fuel
 
 **Refuel** (UI: "Tanken"):
