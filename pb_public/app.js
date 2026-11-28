@@ -1617,7 +1617,9 @@ function gridStep(max) {
 function renderCosts(car) {
   const cars = car ? [car] : db.cars;
   const ids = new Set(cars.map((c) => c.id));
-  const entries = db.entries.filter((e) => ids.has(e.car) && e.type !== 'documents' && Number(e.cost) > 0);
+  // Costs come from entries with an amount; the km driven from every entry with a mileage
+  const kmEntries = db.entries.filter((e) => ids.has(e.car));
+  const entries = kmEntries.filter((e) => e.type !== 'documents' && Number(e.cost) > 0);
   const now = thisYear();
   const years = [...new Set([now, ...entries.map((e) => e.date.slice(0, 4))])].sort();
   if (costView.year !== 'all' && !years.includes(costView.year)) costView.year = now;
@@ -1647,7 +1649,7 @@ function renderCosts(car) {
     </div>
     <div class="costs${layout === 'split' ? ' split' : ''}">
       ${!entries.length ? emptyState('wrench', t('costs.emptyTitle'), t('costs.emptyText'))
-        : year === 'all' ? costsAllYears(car, cars, entries) : costsYear(car, cars, entries, year)}
+        : year === 'all' ? costsAllYears(car, cars, entries, kmEntries) : costsYear(car, cars, entries, year, kmEntries)}
     </div>`;
 }
 
@@ -1655,8 +1657,8 @@ const costTile = (label, value, sub, cls = '') =>
   `<div class="card tile${cls ? ` ${cls}` : ''}"><div><span>${label}</span><strong>${value}</strong>${sub ? `<small class="muted">${sub}</small>` : ''}</div></div>`;
 
 // One year: key figures, shares, bars per month and the table per type
-function costsYear(car, cars, entries, year) {
-  const fig = yearFigures({ entries, cars, year, today: today(), ...partsBy(car) });
+function costsYear(car, cars, entries, year, kmEntries) {
+  const fig = yearFigures({ entries, kmEntries, cars, year, today: today(), ...partsBy(car) });
   const { current, months, total, types, avg, prevYear, hasPrev } = fig;
   const period = entries.filter((e) => e.date.startsWith(year));
   const range = monthRange(months);
@@ -1668,7 +1670,7 @@ function costsYear(car, cars, entries, year) {
         ? (hasPrev ? `${signed(total - fig.prevSameTotal)} ${esc(t('costs.vs', { period: compare }))}` : '')
         : esc(tn('count.cars', cars.length)))}
       ${costTile(t('costs.avgPerMonth'), money0.format(avg), esc(range))}
-      ${costTile(t('stats.perKm'), fig.perKm === null ? '–' : money.format(fig.perKm), fig.perKm === null ? '' : esc(t('costs.kmDriven', { km: km(fig.driven) })))}
+      ${costTile(t('stats.perKm'), fig.perKm === null ? '–' : money.format(fig.perKm), fig.perKm === null ? '' : esc(t('costs.kmDriven', { km: km(fig.driven), year })))}
       ${fig.projection !== null
         ? costTile(t('costs.projection', { year }), money0.format(fig.projection), esc(t('costs.projectionSub')), 'accent')
         : costTile(t('costs.noFuel'), money0.format(fig.noFuel), esc(t('costs.noFuelSub')))}
@@ -1708,7 +1710,7 @@ function costsYear(car, cars, entries, year) {
   return `
     ${tiles}
     ${costShares(types, total, t('costs.where'))}
-    ${car ? '' : costPerCar(cars, period, year)}
+    ${car ? '' : costPerCar(cars, period, year, kmEntries.filter((e) => e.date.startsWith(year)))}
     <div class="costs-pair">
       <section class="card costs-card">
         <div class="costs-card-head"><h2>${t('costs.perMonthChart')}</h2>${head}</div>
@@ -1753,9 +1755,9 @@ function fuelCard(intervals, fuelPerKm) {
 }
 
 // All years: totals since purchase, average per full year, bars per year
-function costsAllYears(car, cars, entries) {
+function costsAllYears(car, cars, entries, kmEntries) {
   const now = thisYear();
-  const fig = allYearsFigures({ entries, cars, today: today(), purchaseDate: car?.info?.purchaseDate, ...partsBy(car) });
+  const fig = allYearsFigures({ entries, kmEntries, cars, today: today(), purchaseDate: car?.info?.purchaseDate, ...partsBy(car) });
   const { months, total, types, full, price } = fig;
   const sinceLabel = asDate(fig.first).toLocaleDateString(locale(), { month: 'short', year: 'numeric' });
 
@@ -1782,7 +1784,7 @@ function costsAllYears(car, cars, entries) {
   return `
     ${tiles}
     ${costShares(types, total, `${t('costs.where')} · ${car ? t('costs.sincePurchase') : t('costs.allTime')}`)}
-    ${car ? '' : costPerCar(cars, entries, 'all')}
+    ${car ? '' : costPerCar(cars, entries, 'all', kmEntries)}
     <section class="card costs-card">
       <div class="costs-card-head"><h2>${t('costs.perYearChart')}</h2>${note}</div>
       ${costChart(buckets, { year: true })}
@@ -1808,10 +1810,11 @@ function costShares(types, total, title) {
 }
 
 // All vehicles: one row per car with its costs by type; a click opens its costs
-function costPerCar(cars, entries, year) {
+// kmEntries: entries of the period whose mileages give the km driven (also without a cost)
+function costPerCar(cars, entries, year, kmEntries) {
   const rows = cars.map((c) => {
     const list = entries.filter((e) => e.car === c.id);
-    return { car: c, list, total: sum(list), types: byType(list), driven: kmDriven([c], list, year === 'all' || year === thisYear()) };
+    return { car: c, list, total: sum(list), types: byType(list), driven: kmDriven([c], kmEntries, year === 'all' || year === thisYear()) };
   });
   const max = Math.max(...rows.map((r) => r.total)) || 1;
   const used = COST_TYPES.filter((type) => rows.some((r) => r.types[type]));

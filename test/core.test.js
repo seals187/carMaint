@@ -246,3 +246,14 @@ test('yearFigures: a month of fixed costs is no outlier, but counts like any cos
   assert.equal(f.buckets[4].top, 'repair');
   assert.equal(core.costType({ type: 'fixed' }), 'fixed');
 });
+
+test('cost figures: km come from every entry with a mileage, costs only from those with an amount', () => {
+  const costed = [e('2026-02-01', 'service', 500, 10000)];
+  const all = [...costed, e('2026-05-01', 'inspection', 0, 12000)];
+  const car = [{ id: 'a', mileage: 0 }];
+  // Without the free MFK only one mileage is known: no km driven
+  assert.equal(core.yearFigures({ entries: costed, cars: car, year: '2026', today: '2026-06-15' }).driven, 0);
+  assert.equal(core.yearFigures({ entries: costed, kmEntries: all, cars: car, year: '2026', today: '2026-06-15' }).perKm, 500 / 2000);
+  assert.equal(core.allYearsFigures({ entries: costed, kmEntries: all, cars: car, today: '2026-06-15' }).perKm,
+    core.runningCostPerKm(car, all, true)); // "All" matches the car page
+});

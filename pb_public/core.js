@@ -206,7 +206,9 @@
   // while the year is running. Buckets: one per month with parts, the previous year's
   // value (prev), future (not reached yet) and top (key of a part that makes the month
   // an outlier: at least twice the average and 60 % of the month; never EXPECTED_PEAKS).
-  function yearFigures({ entries, cars, year, today, keys = COST_TYPES, keyOf = costType }) {
+  // kmEntries: the entries whose mileages give the km driven – all of the cars', also those
+  // without a cost, so the figures match the car page (default: entries).
+  function yearFigures({ entries, cars, year, today, keys = COST_TYPES, keyOf = costType, kmEntries = entries }) {
     const current = year === today.slice(0, 4);
     const months = current ? Number(today.slice(5, 7)) : 12;
     const period = entries.filter((e) => e.date.startsWith(year));
@@ -216,7 +218,7 @@
     const total = sumCosts(period);
     const types = costsByType(period);
     const avg = total / months;
-    const driven = kmDriven(cars, period, current);
+    const driven = kmDriven(cars, kmEntries.filter((e) => e.date.startsWith(year)), current);
     const prevMonths = monthTotals(prevAll, prevYear);
     const buckets = Array.from({ length: 12 }, (_, i) => {
       const list = period.filter((e) => e.date.startsWith(`${year}-${pad2(i + 1)}`));
@@ -242,7 +244,8 @@
   // All years since the first entry or the purchase: totals, average per full year
   // (extrapolated without one), and one bucket per year (at most twelve). The running
   // year gets an estimate for its remaining months (estimateTop).
-  function allYearsFigures({ entries, cars, today, purchaseDate = '', keys = COST_TYPES, keyOf = costType }) {
+  // kmEntries as in yearFigures.
+  function allYearsFigures({ entries, cars, today, purchaseDate = '', keys = COST_TYPES, keyOf = costType, kmEntries = entries }) {
     const now = today.slice(0, 4);
     const months = Number(today.slice(5, 7));
     const total = sumCosts(entries);
@@ -255,7 +258,7 @@
     const full = years.filter((y) => y < now && (y > firstYear || firstMonth === 1));
     const perYear = full.length ? sumCosts(entries.filter((e) => full.includes(e.date.slice(0, 4)))) / full.length
       : total / Math.max(1, (Number(now) - Number(firstYear)) * 12 + months - firstMonth + 1) * 12;
-    const driven = kmDriven(cars, entries, true);
+    const driven = kmDriven(cars, kmEntries, true);
     const price = cars.reduce((n, c) => n + (Number(c.info && c.info.purchasePrice) || 0), 0);
     const buckets = years.map((y) => {
       const list = entries.filter((e) => e.date.startsWith(y));

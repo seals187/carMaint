@@ -51,6 +51,8 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
     const mileage = i === 7 ? 0 : 45600 + i * 700 + (i >= 5 ? 700 : 0);
     await api(T, 'POST', rec('entries'), { car: car2.id, type: 'fuel', date: iso(-180 + i * 22), mileage, title: 'Refuel', cost: Math.round(litres * 185) / 100, litres, partial });
   }
+  // An entry without a cost still counts for the km driven (cost analysis = car page, since 0.4.1)
+  await api(T, 'POST', rec('entries'), { car: car.id, type: 'inspection', date: iso(-500), mileage: 3000, title: 'MFK free' });
   // Fixed costs (since 0.4): the yearly insurance, not marked as an outlier month
   await api(T, 'POST', rec('entries'), { car: car.id, type: 'fixed', date: iso(-45), title: 'Insurance', cost: 1100 })
     .catch((err) => log('fixed cost seed failed:', err.message.slice(0, 60)));

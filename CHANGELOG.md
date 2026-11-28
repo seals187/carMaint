@@ -6,6 +6,16 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.4.1] – 2026-11-28
+
+### Fixed
+- Cost analysis: the km driven now also come from entries without a cost (e.g. an MFK or a refuel without an
+  amount), like on the car page. "All" and the car page now show the same cost per km.
+
+### Changed
+- Cost analysis: "Per km" names the year it covers ("over 9,000 km · 2026"), since it differs from the car page,
+  which counts since the first entry.
+
 ## [0.4.0] – 2026-11-28
 
 ### Added
@@ -255,7 +265,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/seals187/carMaint/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/seals187/carMaint/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/seals187/carMaint/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/seals187/carMaint/compare/v0.2.11...v0.3.0
