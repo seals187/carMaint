@@ -8,6 +8,23 @@ A personal maintenance log for vehicles: what was done to a car, when, at what m
 An entry for a cost of owning a car that does not depend on driving or repairs, such as insurance, road tax or the motorway vignette; booked on the day it was paid.
 _Avoid_: Insurance entry, recurring cost, overhead
 
+## Tyres
+
+**Tyre set** (UI: "Sommerreifen", "Winterreifen"):
+The summer or the winter tyres of a car; a car has at most one of each at a time.
+_Avoid_: Wheels, rims, season
+
+**Tyre swap** (UI: "Reifenwechsel"):
+A tyres entry that says which tyre set was mounted; tyre work without a mounted set (a puncture, a check) is not a swap.
+_Avoid_: Tyre change (for repairs)
+
+**New tyres**:
+A tyre swap that mounts newly bought tyres; the tyre set's distance starts again at zero.
+
+**Tyre distance** (UI: "Reifen-km"):
+Kilometres driven on a tyre set since it was new: from each swap that mounted it to the next swap, and for the mounted set up to the car's current mileage.
+_Avoid_: Mileage (that is the odometer reading), tyre mileage, wear
+
 ## Fuel
 
 **Refuel** (UI: "Tanken"):

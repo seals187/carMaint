@@ -19,11 +19,17 @@ const PDF = [
   '%%EOF',
 ].join('\n');
 
+// Seeding many records runs into the server's rate limit: wait and retry on 429
 async function api(token, method, path, body) {
-  const res = await fetch(BASE + path, {
-    method, headers: { ...(token && { Authorization: token }), ...(body && { 'Content-Type': 'application/json' }) },
-    body: body && JSON.stringify(body),
-  });
+  let res;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    res = await fetch(BASE + path, {
+      method, headers: { ...(token && { Authorization: token }), ...(body && { 'Content-Type': 'application/json' }) },
+      body: body && JSON.stringify(body),
+    });
+    if (res.status !== 429) break;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
   const text = await res.text();
   if (!res.ok) throw new Error(`${method} ${path} -> ${res.status} ${text}`);
   return text ? JSON.parse(text) : null;
@@ -56,6 +62,10 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
   // Fixed costs (since 0.4): the yearly insurance, not marked as an outlier month
   await api(T, 'POST', rec('entries'), { car: car.id, type: 'fixed', date: iso(-45), title: 'Insurance', cost: 1100 })
     .catch((err) => log('fixed cost seed failed:', err.message.slice(0, 60)));
+  // Tyre swaps (since 0.5): new summer tyres, winter, summer again (mounted); a puncture is no swap
+  for (const [d, mileage, tireSet, newTires] of [[-240, 6000, 'summer', true], [-120, 9000, 'winter', false], [-15, 17000, 'summer', false], [-5, 18500, '', false]]) {
+    await api(T, 'POST', rec('entries'), { car: car.id, type: 'tires', date: iso(d), mileage, title: tireSet ? `Swap ${tireSet}` : 'Puncture', cost: 40, tireSet, newTires });
+  }
   await api(T, 'POST', rec('reminders'), { car: car.id, title: 'Oil', type: 'service', intervalKm: 15000, dueKm: 19500, dueDate: iso(200) });
   await api(T, 'POST', rec('reminders'), { car: car.id, title: 'Tyres', type: 'tires', intervalMonths: 6, dueDate: iso(-2) });
   await api(T, 'POST', rec('reminders'), { car: car2.id, title: 'Oil', type: 'service', intervalMonths: 12, dueDate: iso(9) });
@@ -82,13 +92,47 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
     if (cut.length) log(`CLIPPED on ${name}:`, cut.join(' | '));
   };
   const text = (sel) => page.$eval(sel, (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => '(missing)');
+  // Confirms the app's own yes/no question (since 0.4.3; older builds use the browser's confirm, accepted above)
+  const confirmAsk = async () => {
+    await new Promise((r) => setTimeout(r, 300));
+    const question = await page.evaluate(() => {
+      const d = document.querySelector('#askDialog[open]');
+      if (!d) return null;
+      d.querySelector('#askOk').click();
+      return d.querySelector('h2').textContent;
+    });
+    if (question) log('asked:', question);
+  };
 
   await go('#/', 'home');
   log('home due:', await text('#due'));
   log('home hero:', await text('.hero'));
   await go(`#/car/${car.id}`, 'car');
   log('car tiles:', await text('.tiles'));
-  log('year labels:', await page.evaluate(() => [...document.querySelectorAll('#entries .year-sep')].map((y) => `${y.textContent} before ${y.nextElementSibling?.querySelector('time')?.textContent}`).join(', ') || 'none'));
+  log('year labels:', await page.evaluate(() => [...document.querySelectorAll('#entries .year-sep')].map((y) => `${y.textContent.replace(/\s+/g, ' ').trim()} before ${y.nextElementSibling?.querySelector('time')?.textContent}`).join(', ') || 'none'));
+  // Older years fold into their label (since 0.4.3); a click unfolds one
+  const folded = await page.evaluate(() => {
+    const btn = document.querySelector('#entries [data-action="toggle-year"][aria-expanded="false"]');
+    btn?.click();
+    return btn?.dataset.year;
+  });
+  if (folded) {
+    await new Promise((r) => setTimeout(r, 300));
+    log('year unfolded:', folded, await page.evaluate((y) => document.querySelector(`[data-action="toggle-year"][data-year="${y}"]`).getAttribute('aria-expanded'), folded));
+    await shot('car-year-unfolded');
+  }
+  // A failed action shows its error in the app's own dialog (since 0.4.3; older builds use alert, logged above)
+  await page.evaluate(() => runAction(() => { throw new Error('Test error'); }));
+  await new Promise((r) => setTimeout(r, 300));
+  const told = await page.evaluate(() => {
+    const d = document.querySelector('#askDialog.error[open]');
+    return d && `${d.querySelector('h2').textContent} [${[...d.querySelectorAll('button')].filter((b) => b.offsetParent).map((b) => b.textContent).join('|')}]`;
+  });
+  if (told) {
+    log('told:', told);
+    await shot('error-dialog');
+    await page.evaluate(() => document.querySelector('#askOk').click());
+  }
   log('car reminders:', await text('.rem-panel'));
   await go(`#/costs/${car.id}`, 'costs-car');
   log('costs car tiles:', await text('.costs-tiles'));
@@ -144,6 +188,30 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
   log('refuel dialog:', await page.evaluate(() => `title=${document.querySelector('#entryForm [name="title"]').value} fuelRow=${!document.querySelector('#fuelRow').hidden} full=${document.querySelector('#entryForm [name="full"]').checked}`));
   await page.evaluate(() => document.querySelector('#entryDialog [data-close]').click());
 
+  // Tyre swaps (since 0.5): tyre distance in the vehicle data, the set taken off in the history;
+  // choosing a set names the entry, saving a new winter set restarts its distance
+  await go(`#/car/${car.id}`, 'tires-car');
+  const tireInfo = () => page.evaluate(() => [...document.querySelectorAll('#infobox .info-list div')]
+    .filter((d) => d.querySelector('.tire-km')).map((d) => d.textContent.replace(/\s+/g, ' ').trim()).join(' | ') || 'none');
+  log('tyre info:', await tireInfo());
+  log('tyre history:', await page.evaluate(() => [...document.querySelectorAll('#entries .entry')].filter((li) => li.querySelector('.entry-fuel') && li.textContent.includes('Swap'))
+    .map((li) => `${li.querySelector('strong').textContent.trim()}: ${li.querySelector('.entry-fuel').textContent}`).join(' | ') || 'none'));
+  await page.evaluate((id) => document.querySelector(`[data-action="add-entry"][data-id="${id}"]`).click(), car.id);
+  const tireDialog = () => page.evaluate(() => `row=${!document.querySelector('#tireRow')?.hidden} title=${document.querySelector('#entryForm [name="title"]').value}`);
+  await page.evaluate(() => document.querySelector('#typePills [value="tires"]').click());
+  log('tyre dialog:', await tireDialog());
+  if (await page.$('#tireRow')) {
+    await page.evaluate(() => document.querySelector('#tireRow [value="winter"]').click());
+    log('tyre dialog winter:', await tireDialog());
+    await page.evaluate(() => document.querySelector('#tireRow [name="newTires"]').click());
+    log('tyre dialog new:', await tireDialog());
+    await shot('tires-dialog');
+    await page.click('#entryForm [type="submit"]:not(#saveNext)');
+    await new Promise((r) => setTimeout(r, 800));
+    log('tyre info after swap:', await tireInfo());
+    await shot('tires-car');
+  } else await page.evaluate(() => document.querySelector('#entryDialog [data-close]').click());
+
   // Dialogs: add reminder, complete a reminder (entry dialog), add document with reminder
   await go(`#/car/${car.id}`, 'car2');
   await page.evaluate((id) => document.querySelector(`[data-action="add-reminder"][data-id="${id}"]`).click(), car.id);
@@ -178,6 +246,7 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
   await page.evaluate(() => document.querySelector('[data-action="edit-document"]').click());
   await new Promise((r) => setTimeout(r, 300));
   await page.click('#docDelete');
+  await confirmAsk();
   await new Promise((r) => setTimeout(r, 1500));
   log('after doc delete:', await text('.rem-panel'), '| docs:', await text('.doc-list'));
 
@@ -197,6 +266,13 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
   await page.click('#entryForm [type="submit"]:not(#saveNext)');
   await new Promise((r) => setTimeout(r, 2500));
   log('history:', (await text('#entries')).slice(0, 200));
+  // Delete the entry again (styled question since 0.4.3)
+  const brake = await page.evaluate(() => [...document.querySelectorAll('#entries .entry')].find((li) => li.innerText.includes('Brake pads'))?.id.slice(6));
+  await page.evaluate((id) => document.querySelector(`[data-action="toggle-entry"][data-id="${id}"]`).click(), brake);
+  await page.evaluate((id) => document.querySelector(`[data-action="delete-entry"][data-id="${id}"]`).click(), brake);
+  await confirmAsk();
+  await new Promise((r) => setTimeout(r, 1000));
+  log('entry deleted:', await page.evaluate(() => !document.querySelector('#entries').innerText.includes('Brake pads')));
 
   // Phone
   await page.setViewport({ width: 390, height: 844, isMobile: true });
@@ -210,6 +286,7 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
   await page.setViewport({ width: 1280, height: 900 });
   await go(`#/car/${car2.id}`, 'car-del');
   await page.evaluate((id) => document.querySelector(`[data-action="delete-car"][data-id="${id}"]`).click(), car2.id);
+  await confirmAsk();
   await new Promise((r) => setTimeout(r, 1500));
   log('after car delete home:', await text('#due'));
 
@@ -235,6 +312,7 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
   await new Promise((r) => setTimeout(r, 1000));
   log('cover is 2nd:', await page.evaluate(() => document.querySelector('.photo-grid .thumb [data-action="delete-photo"]').dataset.photo.startsWith('photo33c')));
   await page.evaluate(() => document.querySelector('[data-action="delete-photo"]').click());
+  await confirmAsk();
   await new Promise((r) => setTimeout(r, 1000));
   log('photos after delete:', await photoCount());
   await shot('car-photos-after');

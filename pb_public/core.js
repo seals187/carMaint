@@ -345,7 +345,39 @@
   // Price per litre of a refuel; null without litres or cost
   const pricePerLitre = (e) => (litresOf(e) && Number(e.cost) ? Number(e.cost) / litresOf(e) : null);
 
+  /* ---------- Tyres ---------- */
+
+  const TIRE_SETS = ['summer', 'winter'];
+
+  // Tyre distance from one car's tyre swaps (tyres entries with a tireSet; others are left
+  // out) and the car's current mileage:
+  //   { mounted, sets: { summer: { km, gaps, used }, winter }, removed }
+  // A stint runs from a swap to the next swap (any set), the last one to currentKm. A set
+  // counts its stints since its last swap with newTires; a stint without a mileage at either
+  // end is not counted and sets `gaps`. removed: swap id → { set, km } of the stint that
+  // ended with that swap (km null when unknown).
+  function tireDistances(entries, currentKm = 0) {
+    const swaps = entries
+      .filter((e) => e.type === 'tires' && TIRE_SETS.includes(e.tireSet))
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.mileage || 0) - (b.mileage || 0));
+    const sets = Object.fromEntries(TIRE_SETS.map((s) => [s, { km: 0, gaps: false, used: false }]));
+    const removed = new Map();
+    swaps.forEach((e, i) => {
+      const set = sets[e.tireSet];
+      if (e.newTires) Object.assign(set, { km: 0, gaps: false });
+      set.used = true;
+      const next = swaps[i + 1];
+      const end = next ? next.mileage : currentKm;
+      const km = e.mileage > 0 && end >= e.mileage ? end - e.mileage : null;
+      if (km === null) set.gaps = true;
+      else set.km += km;
+      if (next) removed.set(next.id, { set: e.tireSet, km });
+    });
+    return { mounted: swaps.at(-1)?.tireSet ?? null, sets, removed };
+  }
+
   return {
+    TIRE_SETS, tireDistances,
     CONSUMPTION_UNITS, PLAUSIBLE_L100, CONSUMPTION_MONTHS, consumptionIntervals, averageConsumption, consumptionIn, pricePerLitre,
     isIsoDate, dayNumber, isoOfDay, daysBetween, addDays, addMonths,
     SOON_KM, SOON_DAYS, UPCOMING_KM, UPCOMING_DAYS, KM_PER_DAY_DEFAULT,

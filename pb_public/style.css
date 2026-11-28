@@ -1420,6 +1420,11 @@ dialog.sheet { width: min(460px, calc(100% - 32px)); }
 .row.fuel-row { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
 .row.fuel-row[hidden] { display: none; }
 .fuel-full { align-self: start; margin-top: 30px; white-space: nowrap; }
+/* Tyre swap: which set was mounted, new tyres; the tyre distance in the vehicle data */
+.row.tire-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.row.tire-row[hidden] { display: none; }
+.tire-row .check { white-space: nowrap; }
+.info-list .tire-km { flex-basis: 100%; font-size: .8rem; font-weight: 400; }
 .entry-main .entry-fuel { font-variant-numeric: tabular-nums; }
 .entry-fuel .warn { font-style: italic; }
 .tiles.four { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr); }
@@ -1439,6 +1444,19 @@ dialog.sheet { width: min(460px, calc(100% - 32px)); }
 .entry.in-group:not(.open) { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
 .entry.in-group:not(.open) .entry-line { padding-left: 38px; }
 .entry.in-group:not(.open) .entry-line::before { left: 16px; }
-/* History: a small year label where the year changes */
-.year-sep { display: flex; align-items: center; gap: 10px; padding: 16px 0 6px; font-size: .75rem; font-weight: 700; letter-spacing: .06em; color: var(--muted); font-variant-numeric: tabular-nums; }
-.year-sep::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+/* History: a year label where the year changes; a click folds the year into it */
+.year-sep { padding: 10px 0 2px; }
+.year-sep button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 0; border: 0; background: none; font: inherit; font-size: .75rem; font-weight: 700; letter-spacing: .06em; color: var(--muted); font-variant-numeric: tabular-nums; cursor: pointer; text-align: left; }
+.year-sep button:hover { color: var(--text); }
+.year-sep .ic { width: 14px; height: 14px; flex: none; transition: transform .15s; }
+.year-sep [aria-expanded="false"] .ic { transform: rotate(-90deg); }
+.year-sep .year-count { font-weight: 500; letter-spacing: normal; }
+.year-sep .year-line { flex: 1; border-top: 1px solid var(--border); }
+.year-sep .year-total { font-weight: 600; letter-spacing: normal; color: var(--text); }
+/* Yes/no questions and error messages (ask() and tell() in app.js): compact, the second line
+   of a message below the first */
+dialog.ask { width: min(420px, calc(100vw - 32px)); }
+dialog.ask h2 { margin-bottom: 8px; font-size: 1.05rem; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
+dialog.ask.error [data-close] { display: none; }
+dialog.ask.error h2 { display: flex; gap: 10px; align-items: flex-start; font-weight: 600; }
+dialog.ask.error h2 .ic { flex: none; width: 22px; height: 22px; margin-top: 1px; color: var(--danger); }

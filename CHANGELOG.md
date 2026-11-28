@@ -6,6 +6,20 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.5.0] – 2026-11-28
+
+### Added
+- Tyre swaps: a tyres entry can say whether summer or winter tyres were mounted, and whether they are new
+  (the title fills itself in). The vehicle data show the km each set has run since it was new and which one is
+  mounted; the history shows how far the set taken off ran since the last swap.
+- History: older years fold into their year label, which shows the number of entries and their total
+  (only those of the chosen type when filtered); a click unfolds the year. The current and the newest year are open.
+
+### Changed
+- Questions before deleting an entry, reminder, document, photo, vehicle or user, and before importing a backup,
+  now appear in the app's own style instead of the browser's plain window. So do error messages.
+- Vehicle data: up to 6 fields (was 4) can be chosen to stay visible when the box is collapsed.
+
 ## [0.4.2] – 2026-11-28
 
 ### Changed
@@ -271,7 +285,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/seals187/carMaint/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/seals187/carMaint/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/seals187/carMaint/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/seals187/carMaint/compare/v0.3.1...v0.4.0

@@ -22,6 +22,7 @@ const I18N = {
     'btn.export': 'Exportieren',
     'btn.import': 'Importieren',
     'btn.retry': 'Erneut versuchen',
+    'btn.ok': 'OK',
     'btn.entry': 'Eintrag',
 
     // Login
@@ -100,6 +101,8 @@ const I18N = {
     'entry.mileage': 'Kilometerstand',
     'entry.cost': 'Kosten',
     'fuel.group': '{n} Tankung|{n} Tankungen',
+    'history.yearCount': '{n} Eintrag|{n} Einträge',
+'entry.tireSet': 'Montierter Reifensatz',    'entry.newTires': 'Neue Reifen',    'tire.noSwap': 'Kein Wechsel',    'tire.summer': 'Sommer',    'tire.winter': 'Winter',    'tire.mounted_summer': 'Sommerreifen montiert',    'tire.mounted_winter': 'Winterreifen montiert',    'tire.new_summer': 'Neue Sommerreifen montiert',    'tire.new_winter': 'Neue Winterreifen montiert',    'tire.mounted': 'montiert',    'tire.removed': '{set} abmontiert nach {km}',    'tire.noMileage': 'ohne km-Stand keine Reifen-km',    'tire.gaps': 'Ein Wechsel ohne km-Stand ist nicht mitgezählt',
     'stats.perKmFuel': 'Pro km inkl. Treibstoff',
     'home.perKmFuel': 'Ø {amount} / km inkl. Treibstoff',
     'settings.perKm': 'Kosten pro km',
@@ -580,6 +583,7 @@ const I18N = {
     'btn.export': 'Export',
     'btn.import': 'Import',
     'btn.retry': 'Try again',
+    'btn.ok': 'OK',
     'btn.entry': 'Entry',
 
     // Login
@@ -658,6 +662,8 @@ const I18N = {
     'entry.mileage': 'Mileage (km)',
     'entry.cost': 'Cost',
     'fuel.group': '{n} refuel|{n} refuels',
+    'history.yearCount': '{n} entry|{n} entries',
+'entry.tireSet': 'Mounted tyre set',    'entry.newTires': 'New tyres',    'tire.noSwap': 'No swap',    'tire.summer': 'Summer',    'tire.winter': 'Winter',    'tire.mounted_summer': 'Summer tyres mounted',    'tire.mounted_winter': 'Winter tyres mounted',    'tire.new_summer': 'New summer tyres mounted',    'tire.new_winter': 'New winter tyres mounted',    'tire.mounted': 'mounted',    'tire.removed': '{set} off after {km}',    'tire.noMileage': 'no mileage, no tyre km',    'tire.gaps': 'A swap without a mileage is not counted',
     'stats.perKmFuel': 'Per km incl. fuel',
     'home.perKmFuel': 'Ø {amount} / km incl. fuel',
     'settings.perKm': 'Cost per km',
@@ -1138,6 +1144,7 @@ const I18N = {
     'btn.export': 'Exportar',
     'btn.import': 'Importar',
     'btn.retry': 'Reintentar',
+    'btn.ok': 'Aceptar',
     'btn.entry': 'Registro',
 
     // Login
@@ -1216,6 +1223,8 @@ const I18N = {
     'entry.mileage': 'Kilometraje (km)',
     'entry.cost': 'Coste',
     'fuel.group': '{n} repostaje|{n} repostajes',
+    'history.yearCount': '{n} entrada|{n} entradas',
+'entry.tireSet': 'Juego de neumáticos montado',    'entry.newTires': 'Neumáticos nuevos',    'tire.noSwap': 'Sin cambio',    'tire.summer': 'Verano',    'tire.winter': 'Invierno',    'tire.mounted_summer': 'Neumáticos de verano montados',    'tire.mounted_winter': 'Neumáticos de invierno montados',    'tire.new_summer': 'Neumáticos de verano nuevos montados',    'tire.new_winter': 'Neumáticos de invierno nuevos montados',    'tire.mounted': 'montados',    'tire.removed': '{set} desmontados tras {km}',    'tire.noMileage': 'sin kilometraje no hay km de neumáticos',    'tire.gaps': 'Un cambio sin kilometraje no se cuenta',
     'stats.perKmFuel': 'Por km con combustible',
     'home.perKmFuel': 'Ø {amount} / km con combustible',
     'settings.perKm': 'Coste por km',
@@ -1696,6 +1705,7 @@ const I18N = {
     'btn.export': 'Exporter',
     'btn.import': 'Importer',
     'btn.retry': 'Réessayer',
+    'btn.ok': 'OK',
     'btn.entry': 'Entrée',
 
     // Login
@@ -1774,6 +1784,8 @@ const I18N = {
     'entry.mileage': 'Kilométrage (km)',
     'entry.cost': 'Coût',
     'fuel.group': '{n} plein|{n} pleins',
+    'history.yearCount': '{n} entrée|{n} entrées',
+'entry.tireSet': 'Jeu de pneus monté',    'entry.newTires': 'Pneus neufs',    'tire.noSwap': 'Pas de changement',    'tire.summer': 'Été',    'tire.winter': 'Hiver',    'tire.mounted_summer': 'Pneus d’été montés',    'tire.mounted_winter': 'Pneus d’hiver montés',    'tire.new_summer': 'Pneus d’été neufs montés',    'tire.new_winter': 'Pneus d’hiver neufs montés',    'tire.mounted': 'montés',    'tire.removed': '{set} démontés après {km}',    'tire.noMileage': 'sans kilométrage, pas de km de pneus',    'tire.gaps': 'Un changement sans kilométrage n’est pas compté',
     'stats.perKmFuel': 'Par km carburant compris',
     'home.perKmFuel': 'Ø {amount} / km carburant compris',
     'settings.perKm': 'Coût par km',

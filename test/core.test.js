@@ -257,3 +257,36 @@ test('cost figures: km come from every entry with a mileage, costs only from tho
   assert.equal(core.allYearsFigures({ entries: costed, kmEntries: all, cars: car, today: '2026-06-15' }).perKm,
     core.runningCostPerKm(car, all, true)); // "All" matches the car page
 });
+
+test('tireDistances: each set sums its stints since it was new; the mounted one runs to the current mileage', () => {
+  const swap = (id, date, mileage, tireSet, newTires = false) => ({ id, type: 'tires', date, mileage, tireSet, newTires });
+  const entries = [
+    swap('s1', '2024-04-06', 25400, 'summer'),
+    swap('w1', '2024-10-19', 32000, 'winter'),
+    swap('s2', '2025-04-12', 38600, 'summer'),
+    swap('w2', '2025-10-25', 45200, 'winter', true), // new winter tyres: the old ones' 6600 km drop out
+    swap('s3', '2026-04-04', 51800, 'summer'),
+    swap('w3', '2026-10-17', 58400, 'winter'),
+    { id: 'p', type: 'tires', date: '2026-11-01', mileage: 59000, tireSet: '' }, // puncture: no swap
+  ];
+  const d = core.tireDistances(entries, 60000);
+  assert.equal(d.mounted, 'winter');
+  assert.deepEqual(d.sets.summer, { km: 6600 + 6600 + 6600, gaps: false, used: true });
+  assert.deepEqual(d.sets.winter, { km: 6600 + 1600, gaps: false, used: true });
+  assert.deepEqual(d.removed.get('w3'), { set: 'summer', km: 6600 });
+  assert.deepEqual(d.removed.get('s2'), { set: 'winter', km: 6600 });
+  assert.equal(d.removed.has('s1'), false);
+  assert.equal(d.removed.has('p'), false);
+});
+
+test('tireDistances: a stint without a mileage is not counted and flagged', () => {
+  const d = core.tireDistances([
+    { id: 'a', type: 'tires', date: '2025-04-01', mileage: 10000, tireSet: 'summer' },
+    { id: 'b', type: 'tires', date: '2025-10-01', mileage: 0, tireSet: 'winter' },
+    { id: 'c', type: 'tires', date: '2026-04-01', mileage: 20000, tireSet: 'summer' },
+  ], 21000);
+  assert.deepEqual(d.sets.summer, { km: 1000, gaps: true, used: true });
+  assert.deepEqual(d.sets.winter, { km: 0, gaps: true, used: true });
+  assert.deepEqual(d.removed.get('b'), { set: 'summer', km: null });
+  assert.deepEqual(core.tireDistances([], 5000), { mounted: null, sets: { summer: { km: 0, gaps: false, used: false }, winter: { km: 0, gaps: false, used: false } }, removed: new Map() });
+});

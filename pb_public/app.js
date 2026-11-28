@@ -6,7 +6,8 @@ const { daysBetween, UPCOMING_DAYS, kmPerDay, inspectionReminder, reminderStatus
   intervalOf, dueFrom, DOC_REMIND_DAYS, docReminderDate,
   CURRENCIES, BOX_MODES: INFO_MODES, PER_KM_MODES, DEFAULT_SETTINGS, isEmail, userSettings, NOTIFY_BEFORE, NOTIFY_FREQUENCIES, NOTIFY_REPEATS, notifyOptions: notifyOptionsOf,
   COST_TYPES, sumCosts: sum, costsByType: byType, monthTotals, kmDriven, runningCostPerKm, yearFigures, allYearsFigures,
-  addMonths, CONSUMPTION_UNITS, CONSUMPTION_MONTHS, consumptionIntervals, averageConsumption, consumptionIn, pricePerLitre } = CarMaint;
+  addMonths, CONSUMPTION_UNITS, CONSUMPTION_MONTHS, consumptionIntervals, averageConsumption, consumptionIn, pricePerLitre,
+  TIRE_SETS, tireDistances } = CarMaint;
 
 const THEME_KEY = 'carmaint:theme';
 const AUTH_KEY = 'carmaint:auth';
@@ -85,6 +86,7 @@ const ICONS = {
   chevronLeft:'<path d="m15 18-6-6 6-6"/>',
   chevronRight: '<path d="m9 18 6-6-6-6"/>',
   chevronDown: '<path d="m6 9 6 6 6-6"/>',
+  alertCircle: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
   settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
   github: '<path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
@@ -669,6 +671,7 @@ let dueCollapsed = false;
 let lastPage = null;
 const openEntries = new Set(); // expanded rows in the history
 const openGroups = new Set(); // expanded runs of refuels in the history (key: newest refuel)
+const openYears = new Map(); // years in the history folded or unfolded by hand (year → open), per car
 // Phones get their own car page; switch layouts when the width crosses the limit
 const phoneQuery = matchMedia('(max-width: 640px)');
 const isPhone = () => phoneQuery.matches;
@@ -689,6 +692,7 @@ function route() {
   } else if (car) {
     if (car.id !== currentCarId) {
       filter = { type: 'all' };
+      openYears.clear();
       phonePanel = null;
       // With an own choice of fields only those are shown at first
       infoCollapsed = defaultInfoCollapsed() || Array.isArray(car.info?.pinned);
@@ -1096,6 +1100,22 @@ async function createBackup(button) {
   }
 }
 
+// A yes/no question in the app's style (instead of the browser's dialog): resolves to true
+// when confirmed. ok: label of the confirm button; danger: red button (deleting).
+function ask(message, { ok = t('btn.delete'), danger = true, error = false } = {}) {
+  const dialog = $('#askDialog');
+  if (dialog.open) dialog.close();
+  dialog.classList.toggle('error', error);
+  $('#askText').innerHTML = `${error ? icon('alertCircle') : ''}<span>${esc(message)}</span>`;
+  const btn = $('#askOk');
+  btn.textContent = ok;
+  btn.className = `btn ${danger ? 'danger' : 'primary'}`;
+  return confirmDialog(dialog);
+}
+
+// An error message in the same dialog (instead of the browser's alert), with one OK button
+const tell = (message) => ask(message, { ok: t('btn.ok'), danger: false, error: true });
+
 // Resolves to true when the dialog was closed with its confirm button
 function confirmDialog(dialog) {
   dialog.returnValue = '';
@@ -1478,8 +1498,7 @@ function renderCarPhone(car) {
   const perKm = costPerKm([car]);
   const consumption = recentConsumption(car.id);
   const sub = [car.year, car.plate].filter(Boolean).map(esc).join(' · ');
-  const info = car.info ?? {};
-  const fields = INFO_FIELDS.filter((f) => info[f.key] != null && info[f.key] !== '').length;
+  const fields = filledInfo(car).length;
   const tiles = [
     ['info', 'car', t('info.short'), fields],
     ['photos', 'image', t('photos.title'), photos.length],
@@ -2023,16 +2042,40 @@ function docValidity(doc) {
 }
 
 // Fields that stay visible when the vehicle data is collapsed: chosen per car
-// (info.pinned, 2–4 fields) or by default VIN and type approval.
+// (info.pinned, PIN_MIN–PIN_MAX fields) or by default VIN and type approval.
 const PIN_MIN = 2;
-const PIN_MAX = 4;
+const PIN_MAX = 6;
 const defaultPins = () => INFO_FIELDS.filter((f) => f.pinned).map((f) => f.key);
 const pinnedKeys = (car) => (Array.isArray(car.info?.pinned) ? car.info.pinned : defaultPins());
+
+// Vehicle data fields of the tyre sets; they also show the tyre distance
+const TIRE_FIELDS = { summer: 'tiresSummer', winter: 'tiresWinter' };
+const tireSetOf = (key) => TIRE_SETS.find((s) => TIRE_FIELDS[s] === key);
+const tiresOf = (car) => tireDistances(historyFor(car.id), car.mileage || 0);
+
+// Fields with a value: entered, or a tyre set with swaps
+function filledInfo(car, tires = tiresOf(car)) {
+  const info = car.info ?? {};
+  return INFO_FIELDS.filter((f) => (info[f.key] != null && info[f.key] !== '') || tires.sets[tireSetOf(f.key)]?.used);
+}
+
+// A field's value as HTML; a tyre set adds its tyre distance and whether it is mounted:
+// "205/55 R16 91H" / "8,200 km · mounted"
+function infoValue(f, info, tires) {
+  const value = info[f.key];
+  const shown = value != null && value !== '' ? (f.format ? f.format(value) : esc(value)) : '';
+  const set = tires.sets[tireSetOf(f.key)];
+  if (!set?.used) return shown;
+  const distance = `<span${set.gaps ? ` title="${esc(t('tire.gaps'))}"` : ''}>${set.gaps ? '≥ ' : ''}${esc(`${fmtNum(set.km)} km`)}</span>`;
+  const mounted = tires.mounted === tireSetOf(f.key) ? ` · <span class="good">${esc(t('tire.mounted'))}</span>` : '';
+  return `${shown}<span class="tire-km muted">${distance}${mounted}</span>`;
+}
 
 function infoBox(car) {
   const info = car.info ?? {};
   const pins = pinnedKeys(car);
-  const filled = INFO_FIELDS.filter((f) => info[f.key] != null && info[f.key] !== '');
+  const tires = tiresOf(car);
+  const filled = filledInfo(car, tires);
   // The chosen fields come first
   const rows = [...filled.filter((f) => pins.includes(f.key)), ...filled.filter((f) => !pins.includes(f.key))];
   const hiddenCount = rows.filter((f) => !pins.includes(f.key)).length;
@@ -2051,7 +2094,7 @@ function infoBox(car) {
       <div class="infobox">
       ${rows.length
         ? `<dl class="info-list">${rows.map((f) => `
-            <div${pins.includes(f.key) ? ' class="pinned"' : ''}><dt>${fieldName(f)}</dt><dd>${f.format ? f.format(info[f.key]) : esc(info[f.key])}</dd></div>`).join('')}
+            <div${pins.includes(f.key) ? ' class="pinned"' : ''}><dt>${fieldName(f)}</dt><dd>${infoValue(f, info, tires)}</dd></div>`).join('')}
           </dl>
           ${collapsible ? `<button class="info-more" data-action="toggle-info">${tn('info.more', hiddenCount)}</button>` : ''}`
         : `<div class="infobox-empty">
@@ -2073,21 +2116,43 @@ function renderEntries(car) {
   } else if (!list.length) {
     html = `<p class="muted center">${t('entries.noMatch')}</p>`;
   } else {
-    const closing = new Map(consumptionOf(car.id).map((i) => [i.id, i]));
+    // Facts the rows show: consumption by closing refuel, the tyre stint a swap ended
+    const facts = { closing: new Map(consumptionOf(car.id).map((i) => [i.id, i])), removed: tiresOf(car).removed };
     // "All": refuels in a row fold into one line; the "Refuel" filter lists each one
     const rows = filter.type === 'all' ? refuelRuns(list) : list;
-    // A small year label where the year changes (and on top unless it is the current year)
+    const yearOf = (r) => (Array.isArray(r) ? r[0] : r).date.slice(0, 4);
+    // A year label where the year changes (and on top unless it is the current year);
+    // the current and the newest year are open, older ones fold into the label
+    const newest = yearOf(rows[0]);
+    const items = [];
     let shownYear = thisYear();
-    const items = rows.map((r) => {
-      const year = (Array.isArray(r) ? r[0] : r).date.slice(0, 4);
-      const sep = year !== shownYear ? `<li class="year-sep">${esc(year)}</li>` : '';
+    for (const year of [...new Set(rows.map(yearOf))]) {
+      const inYear = rows.filter((r) => yearOf(r) === year);
+      const entries = inYear.flat();
+      const open = (openYears.get(year) ?? (year === thisYear() || year === newest))
+        || entries.some((e) => openEntries.has(e.id));
+      if (year !== shownYear) items.push(yearSep(year, entries, open));
       shownYear = year;
-      return sep + (Array.isArray(r) ? fuelGroup(r, closing) : entryItem(r, closing));
-    });
+      if (open) items.push(...inYear.map((r) => (Array.isArray(r) ? fuelGroup(r, facts) : entryItem(r, facts))));
+    }
     html = `<ul class="history">${items.join('')}</ul>`;
   }
   $('#entries').innerHTML = html;
   hydrate();
+}
+
+// Year label in the history; folded it sums up the year: "▸ 2025 · 18 entries ──── CHF 2'340"
+// (with a type filter only the entries of that type)
+function yearSep(year, entries, open) {
+  const count = filter.type === 'fuel' ? tn('fuel.group', entries.length) : tn('history.yearCount', entries.length);
+  const total = sum(entries);
+  return `
+    <li class="year-sep">
+      <button data-action="toggle-year" data-year="${esc(year)}" aria-expanded="${open}">
+        ${icon('chevronDown')}<span>${esc(year)}</span>${open ? '' : `<span class="year-count">· ${esc(count)}</span>`}
+        <span class="year-line"></span>${!open && total ? `<span class="year-total">${money.format(total)}</span>` : ''}
+      </button>
+    </li>`;
 }
 
 // Consecutive refuels of one year (at least two, nothing else in between) as one array;
@@ -2107,11 +2172,11 @@ function refuelRuns(list) {
 // One line for refuels in a row: "5 refuels · 12.09.–14.11.2026 · 6.5 l/100 km · CHF 392".
 // A click lists them; a group with an expanded entry (e.g. from the search) is open.
 // The key is the newest refuel, so a new refuel starts the group closed again.
-function fuelGroup(run, closing) {
+function fuelGroup(run, facts) {
   const key = run[0].id;
   const open = openGroups.has(key) || run.some((e) => openEntries.has(e.id));
   const range = `${fmtDateShort(run.at(-1).date)}–${fmtDateShort(run[0].date)}`;
-  const avg = averageConsumption(run.map((e) => closing.get(e.id)).filter(Boolean));
+  const avg = averageConsumption(run.map((e) => facts.closing.get(e.id)).filter(Boolean));
   const sub = [range, avg !== null && fmtConsumption(avg)].filter(Boolean).map(esc).join(' · ');
   const total = sum(run);
   const head = `<strong><span class="entry-type">${typeIcon('fuel')}</span>${esc(tn('fuel.group', run.length))}${icon('chevronDown')}</strong>`;
@@ -2128,7 +2193,7 @@ function fuelGroup(run, closing) {
         <span class="entry-km muted">${run[0].mileage ? km(run[0].mileage) : ''}</span>
         <span class="entry-cost">${total ? money.format(total) : ''}</span>
       </button>`}
-    </li>${open ? run.map((e) => entryItem(e, closing, key)).join('') : ''}`;
+    </li>${open ? run.map((e) => entryItem(e, facts, key)).join('') : ''}`;
 }
 
 // Receipt as a chip: "PDF Rechnung_Garage_Meier.pdf"
@@ -2153,26 +2218,38 @@ function refuelLine(e, closing) {
   return `<span class="muted entry-fuel">${[state, ...parts].filter(Boolean).join(' · ')}</span>`;
 }
 
+// Tyre swap details: the set taken off and its km since the last swap ("Summer tyres off
+// after 6,600 km"), or why they are unknown. removed: stint by swap id.
+function tireLine(e, removed) {
+  if (e.type !== 'tires' || !TIRE_SETS.includes(e.tireSet)) return '';
+  const stint = removed.get(e.id);
+  const state = !e.mileage ? `<span class="warn">${esc(t('tire.noMileage'))}</span>`
+    : stint?.km != null ? esc(t('tire.removed', { set: t(`info.${TIRE_FIELDS[stint.set]}`), km: `${fmtNum(stint.km)} km` }))
+    : stint ? `<span class="warn">${esc(t('tire.noMileage'))}</span>` : '';
+  const parts = [state, e.newTires && esc(t('entry.newTires'))].filter(Boolean);
+  return parts.length ? `<span class="muted entry-fuel">${parts.join(' · ')}</span>` : '';
+}
+
 // Compact row with the receipts; a click shows the notes and the actions.
 // group: key of the run of refuels the row is listed in (indented below it)
-function entryItem(e, closing, group = '') {
+function entryItem(e, facts, group = '') {
   const color = (TYPES[e.type] ?? TYPES.other).color;
   const id = esc(e.id);
   const open = openEntries.has(e.id);
   const files = e.attachments.length;
-  const fuel = refuelLine(e, closing);
+  const detail = refuelLine(e, facts.closing) || tireLine(e, facts.removed);
   const meta = [typeLabel(e.type), e.shop].filter(Boolean).map(esc).join(' · ');
   const date = fmtDateNum(e.date);
   return `
     <li class="entry${open ? ' open' : ''}${group ? ' in-group' : ''}" id="entry-${id}" data-color="${color}"${group ? ` data-group="${esc(group)}"` : ''}>
       ${isPhone() ? `
       <button class="entry-line compact" data-action="toggle-entry" data-id="${id}" aria-expanded="${open}">
-        <span class="entry-main"><strong><span class="entry-type">${typeIcon(e.type)}</span>${esc(e.title)}</strong><span class="muted entry-sub"><span class="entry-sub-text"><time datetime="${esc(e.date)}">${date}</time> · ${meta}${e.mileage ? ` · <span class="nowrap">${km(e.mileage)}</span>` : ''}</span>${files ? `<span class="entry-clip" data-action="view-file" data-id="${id}" data-file="${esc(e.attachments[0])}" title="${esc(t('att.view', { name: attachmentLabel(e, e.attachments[0]) }))}">${icon('paperclip')}${files > 1 ? files : ''}</span>` : ''}</span>${fuel}</span>
+        <span class="entry-main"><strong><span class="entry-type">${typeIcon(e.type)}</span>${esc(e.title)}</strong><span class="muted entry-sub"><span class="entry-sub-text"><time datetime="${esc(e.date)}">${date}</time> · ${meta}${e.mileage ? ` · <span class="nowrap">${km(e.mileage)}</span>` : ''}</span>${files ? `<span class="entry-clip" data-action="view-file" data-id="${id}" data-file="${esc(e.attachments[0])}" title="${esc(t('att.view', { name: attachmentLabel(e, e.attachments[0]) }))}">${icon('paperclip')}${files > 1 ? files : ''}</span>` : ''}</span>${detail}</span>
         <span class="entry-cost">${e.cost ? money.format(e.cost) : ''}</span>
       </button>` : `
       <button class="entry-line" data-action="toggle-entry" data-id="${id}" aria-expanded="${open}">
         <time datetime="${esc(e.date)}">${date}</time>
-        <span class="entry-main"><strong><span class="entry-type">${typeIcon(e.type)}</span>${esc(e.title)}</strong><span class="muted">${meta}${files ? ` · <span class="nowrap">${icon('paperclip')} ${files}</span>` : ''}</span>${fuel}</span>
+        <span class="entry-main"><strong><span class="entry-type">${typeIcon(e.type)}</span>${esc(e.title)}</strong><span class="muted">${meta}${files ? ` · <span class="nowrap">${icon('paperclip')} ${files}</span>` : ''}</span>${detail}</span>
         <span class="entry-km muted">${e.mileage ? km(e.mileage) : ''}</span>
         <span class="entry-cost">${e.cost ? money.format(e.cost) : ''}</span>
       </button>`}
@@ -2228,7 +2305,7 @@ async function withBusy(form, fn) {
       errorEl.textContent = message;
       errorEl.hidden = false;
     } else {
-      alert(message);
+      tell(message);
     }
   } finally {
     buttons.forEach((b) => { b.disabled = false; });
@@ -2385,6 +2462,8 @@ function openEntryDialog(entry, reminder = null) {
   f.namedItem('cost').value = entry.cost || '';
   f.namedItem('litres').value = entry.litres || '';
   f.namedItem('full').checked = !entry.partial;
+  f.namedItem('tireSet').value = entry.tireSet ?? '';
+  f.namedItem('newTires').checked = !!entry.newTires;
   for (const key of ['title', 'shop', 'notes']) f.namedItem(key).value = entry[key] ?? '';
   $('#currencySymbol').textContent = currencySymbol();
   entryFiles.open(entry);
@@ -2491,6 +2570,10 @@ function updateEntryHints() {
   // Refuels: litres and full tank; price per litre, or why there will be no consumption
   const fuel = f.namedItem('type').value === 'fuel';
   $('#fuelRow').hidden = !fuel;
+  // Tyres: which set was mounted; "new tyres" only with a set
+  const tires = f.namedItem('type').value === 'tires';
+  $('#tireRow').hidden = !tires;
+  f.namedItem('newTires').disabled = !f.namedItem('tireSet').value;
   const ppl = pricePerLitre({ cost: f.namedItem('cost').value, litres: f.namedItem('litres').value });
   $('#litresHint').textContent = !fuel || !Number(f.namedItem('litres').value) ? ''
     : !mileage ? t('fuel.noMileage')
@@ -2524,6 +2607,19 @@ entryForm.addEventListener('change', (ev) => {
       title.value = '';
     }
   }
+  // Choosing the mounted tyre set names the swap ("Winter tyres mounted", "New winter
+  // tyres mounted") the same way
+  if (['type', 'tireSet', 'newTires'].includes(ev.target.name)) {
+    const f = entryForm.elements;
+    const title = f.namedItem('title');
+    const set = f.namedItem('type').value === 'tires' ? f.namedItem('tireSet').value : '';
+    if (!set) f.namedItem('newTires').checked = false;
+    const autos = TIRE_SETS.flatMap((s) => [t(`tire.mounted_${s}`), t(`tire.new_${s}`)]);
+    if (!title.value.trim() || title.value === t('tpl.tires') || autos.includes(title.value)) {
+      title.value = !set ? (autos.includes(title.value) ? '' : title.value)
+        : t(`tire.${f.namedItem('newTires').checked ? 'new' : 'mounted'}_${set}`);
+    }
+  }
   updateEntryHints();
 });
 
@@ -2536,6 +2632,12 @@ $('#todayBtn').addEventListener('click', () => {
 const refuelFields = (f) => (f.type === 'fuel'
   ? { litres: Number(f.litres) > 0 ? Number(f.litres) : null, partial: !f.full }
   : { litres: null, partial: false });
+
+// Mounted tyre set and new tyres from the entry dialog; cleared for other types
+const tireFields = (f) => {
+  const tireSet = f.type === 'tires' && TIRE_SETS.includes(f.tireSet) ? f.tireSet : '';
+  return { tireSet, newTires: !!tireSet && !!f.newTires };
+};
 
 async function bumpMileage(car, mileage) {
   if (mileage && mileage > (car.mileage || 0)) {
@@ -2597,6 +2699,8 @@ function resetForNext() {
   const f = entryForm.elements;
   for (const key of ['title', 'cost', 'litres', 'notes']) f.namedItem(key).value = '';
   f.namedItem('full').checked = true;
+  f.namedItem('tireSet').value = '';
+  f.namedItem('newTires').checked = false;
   entryFiles.reset();
   completing = null;
   renderTemplates();
@@ -2619,6 +2723,7 @@ entryForm.addEventListener('submit', (ev) => {
       shop: f.shop.trim(),
       notes: f.notes.trim(),
       ...refuelFields(f),
+      ...tireFields(f),
     };
     const entry = await entryFiles.save((fields) =>
       store.save('entries', existing ? { ...data, ...fields } : { ...data, car: f.car }, existing?.id));
@@ -2743,8 +2848,9 @@ reminderForm.addEventListener('submit', (ev) => {
 
 $('#reminderDelete').addEventListener('click', () => {
   const r = reminderById(reminderForm.elements.namedItem('id').value);
-  if (!r || !confirm(t('confirm.deleteReminder', { title: r.title }))) return;
+  if (!r) return;
   runAction(async () => {
+    if (!await ask(t('confirm.deleteReminder', { title: r.title }))) return;
     await store.remove('reminders', r.id);
     reminderDialog.close();
     route();
@@ -2822,8 +2928,9 @@ docForm.addEventListener('submit', (ev) => {
 
 $('#docDelete').addEventListener('click', () => {
   const doc = documentById(docForm.elements.namedItem('id').value);
-  if (!doc || !confirm(t('confirm.deleteDoc', { title: doc.title }))) return;
+  if (!doc) return;
   runAction(async () => {
+    if (!await ask(t('confirm.deleteDoc', { title: doc.title }))) return;
     await store.remove('documents', doc.id);
     docDialog.close();
     route();
@@ -3047,7 +3154,7 @@ userForm.addEventListener('submit', (ev) => {
   });
 });
 
-for (const dialog of [carDialog, entryDialog, infoDialog, userDialog, passwordDialog, docsDialog, reminderDialog, docDialog, quickDialog, lightbox, $('#restoreDialog'), $('#backupDeleteDialog')]) {
+for (const dialog of [carDialog, entryDialog, infoDialog, userDialog, passwordDialog, docsDialog, reminderDialog, docDialog, quickDialog, lightbox, $('#restoreDialog'), $('#backupDeleteDialog'), $('#askDialog')]) {
   dialog.addEventListener('click', (ev) => {
     if (ev.target === dialog || ev.target.closest('[data-close]')) dialog.close();
   });
@@ -3172,7 +3279,7 @@ async function runAction(fn) {
     await fn();
   } catch (err) {
     console.error(err);
-    alert(err.message || t('err.action'));
+    tell(err.message || t('err.action'));
   }
 }
 
@@ -3198,8 +3305,8 @@ document.addEventListener('click', (ev) => {
     case 'delete-car': {
       const car = carById(id);
       const entries = tn('count.entries', entriesFor(id).length);
-      if (!confirm(t('confirm.deleteCar', { car: `${car.make} ${car.model}`, entries }))) return;
       runAction(async () => {
+        if (!await ask(t('confirm.deleteCar', { car: `${car.make} ${car.model}`, entries }))) return;
         await store.remove('cars', id);
         location.hash = '#/';
         route();
@@ -3256,8 +3363,8 @@ document.addEventListener('click', (ev) => {
       });
       break;
     case 'delete-photo':
-      if (!confirm(t('confirm.deletePhoto'))) return;
       runAction(async () => {
+        if (!await ask(t('confirm.deletePhoto'))) return;
         await store.save('cars', { 'photos-': [el.dataset.photo] }, id);
         route();
         toast(t('toast.photoDeleted'));
@@ -3297,8 +3404,8 @@ document.addEventListener('click', (ev) => {
       break;
     case 'delete-entry': {
       const entry = entryById(id);
-      if (!confirm(t('confirm.deleteEntry', { title: entry.title }))) return;
       runAction(async () => {
+        if (!await ask(t('confirm.deleteEntry', { title: entry.title }))) return;
         await store.remove('entries', id);
         route();
         toast(t('toast.entryDeleted'));
@@ -3329,6 +3436,16 @@ document.addEventListener('click', (ev) => {
       } else openGroups.add(key);
       renderEntries(carById(currentCarId));
       $(`[data-action="toggle-fuel-group"][data-key="${CSS.escape(key)}"]`)?.focus();
+      break;
+    }
+    case 'toggle-year': {
+      const year = el.dataset.year;
+      const open = el.getAttribute('aria-expanded') !== 'true';
+      openYears.set(year, open);
+      // Folding also closes the entries opened in that year
+      if (!open) historyFor(currentCarId).filter((e) => e.date.startsWith(year)).forEach((e) => openEntries.delete(e.id));
+      renderEntries(carById(currentCarId));
+      $(`[data-action="toggle-year"][data-year="${CSS.escape(year)}"]`)?.focus();
       break;
     }
     case 'toggle-due-group': {
@@ -3403,8 +3520,8 @@ document.addEventListener('click', (ev) => {
       showDialog(userDialog);
       break;
     case 'delete-user':
-      if (!confirm(t('confirm.deleteUser', { name: el.dataset.name }))) return;
       runAction(async () => {
+        if (!await ask(t('confirm.deleteUser', { name: el.dataset.name }))) return;
         await api('DELETE', rec('users', id));
         renderUsers();
         toast(t('toast.userDeleted', { name: el.dataset.name }));
@@ -3464,7 +3581,8 @@ async function exportBackup() {
     for (const name of e.attachments) attachments.push(await addFile(recordFile(e, name), attachmentLabel(e, name)));
     entries.push({
       id: e.id, carId: e.car, type: e.type, date: e.date, mileage: e.mileage || null, title: e.title,
-      cost: e.cost || null, shop: e.shop, notes: e.notes, litres: e.litres || null, partial: !!e.partial, attachments,
+      cost: e.cost || null, shop: e.shop, notes: e.notes, litres: e.litres || null, partial: !!e.partial,
+      tireSet: e.tireSet || '', newTires: !!e.newTires, attachments,
     });
   }
 
@@ -3544,6 +3662,8 @@ async function importBackup(data) {
         // Litres and partial refuels exist since 0.3
         litres: e.type === 'fuel' && Number(e.litres) > 0 ? Number(e.litres) : null,
         partial: e.type === 'fuel' && e.partial === true,
+        // Mounted tyre set and new tyres (older backups have none)
+        ...tireFields({ type: e.type, tireSet: e.tireSet, newTires: e.newTires === true }),
       });
       const atts = await filesOf(e.attachments, (a) => fileOf(a?.id, a?.name, serverConfig.fileTypes.attachments));
       if (atts.length) await uploadAttachments(entry, atts);
@@ -3608,7 +3728,7 @@ document.addEventListener('change', async (ev) => {
       throw new Error(t('err.invalidBackup'));
     }
     const count = Array.isArray(data?.cars) ? data.cars.length : 0;
-    if (!confirm(t('confirm.import', { cars: tn('count.carsWith', count) }))) return;
+    if (!await ask(t('confirm.import', { cars: tn('count.carsWith', count) }), { ok: t('btn.import'), danger: false })) return;
     await importBackup(data);
   });
 });
