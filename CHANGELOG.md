@@ -6,6 +6,12 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 
 ## [Unreleased]
 
+## [0.4.2] – 2026-11-28
+
+### Changed
+- History: a small year label where the year changes (on top too, unless the newest entry is from this year).
+  Runs of refuels no longer span two years.
+
 ## [0.4.1] – 2026-11-28
 
 ### Fixed
@@ -265,7 +271,8 @@ As long as the version starts with `0.`, CarMaint is in initial development.
 - Backup export and import (including data from the former browser-only version)
 - PocketBase backend, Docker image on ghcr.io, configuration via `.env`
 
-[Unreleased]: https://github.com/seals187/carMaint/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/seals187/carMaint/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/seals187/carMaint/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/seals187/carMaint/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/seals187/carMaint/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/seals187/carMaint/compare/v0.3.0...v0.3.1

@@ -2076,19 +2076,29 @@ function renderEntries(car) {
     const closing = new Map(consumptionOf(car.id).map((i) => [i.id, i]));
     // "All": refuels in a row fold into one line; the "Refuel" filter lists each one
     const rows = filter.type === 'all' ? refuelRuns(list) : list;
-    html = `<ul class="history">${rows.map((r) => (Array.isArray(r) ? fuelGroup(r, closing) : entryItem(r, closing))).join('')}</ul>`;
+    // A small year label where the year changes (and on top unless it is the current year)
+    let shownYear = thisYear();
+    const items = rows.map((r) => {
+      const year = (Array.isArray(r) ? r[0] : r).date.slice(0, 4);
+      const sep = year !== shownYear ? `<li class="year-sep">${esc(year)}</li>` : '';
+      shownYear = year;
+      return sep + (Array.isArray(r) ? fuelGroup(r, closing) : entryItem(r, closing));
+    });
+    html = `<ul class="history">${items.join('')}</ul>`;
   }
   $('#entries').innerHTML = html;
   hydrate();
 }
 
-// Consecutive refuels (at least two, nothing else in between) as one array; other entries stay
+// Consecutive refuels of one year (at least two, nothing else in between) as one array;
+// other entries stay
 function refuelRuns(list) {
   const rows = [];
+  const year = (e) => e.date.slice(0, 4);
   for (const e of list) {
     const last = rows.at(-1);
-    if (e.type === 'fuel' && last?.type === 'fuel') rows[rows.length - 1] = [last, e];
-    else if (e.type === 'fuel' && Array.isArray(last) && last[0].type === 'fuel') last.push(e);
+    if (e.type === 'fuel' && last?.type === 'fuel' && year(last) === year(e)) rows[rows.length - 1] = [last, e];
+    else if (e.type === 'fuel' && Array.isArray(last) && year(last[0]) === year(e)) last.push(e);
     else rows.push(e);
   }
   return rows;

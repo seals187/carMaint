@@ -88,6 +88,7 @@ const rec = (c, id = '') => `/api/collections/${c}/records${id ? `/${id}` : ''}`
   log('home hero:', await text('.hero'));
   await go(`#/car/${car.id}`, 'car');
   log('car tiles:', await text('.tiles'));
+  log('year labels:', await page.evaluate(() => [...document.querySelectorAll('#entries .year-sep')].map((y) => `${y.textContent} before ${y.nextElementSibling?.querySelector('time')?.textContent}`).join(', ') || 'none'));
   log('car reminders:', await text('.rem-panel'));
   await go(`#/costs/${car.id}`, 'costs-car');
   log('costs car tiles:', await text('.costs-tiles'));

@@ -1439,3 +1439,6 @@ dialog.sheet { width: min(460px, calc(100% - 32px)); }
 .entry.in-group:not(.open) { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
 .entry.in-group:not(.open) .entry-line { padding-left: 38px; }
 .entry.in-group:not(.open) .entry-line::before { left: 16px; }
+/* History: a small year label where the year changes */
+.year-sep { display: flex; align-items: center; gap: 10px; padding: 16px 0 6px; font-size: .75rem; font-weight: 700; letter-spacing: .06em; color: var(--muted); font-variant-numeric: tabular-nums; }
+.year-sep::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
